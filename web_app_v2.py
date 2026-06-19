@@ -17,6 +17,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import row
 import streamlit as st
 
 from beam_core import BeamInput, BeamResult, solve_beam
@@ -756,7 +757,6 @@ def render_plane_frame() -> None:
                 if pd.isna(r.get("node")): continue
                 FramePointLoad(
                     node=int(row["node"]),
-                    Fx=float(row["Fx (kN)"]),
                     Fx=float(row["Fx (kN)"]),
                     Fy=float(row["Fy (kN)"]),
                     Mz=float(row["Mz (kNm)"])
