@@ -509,10 +509,8 @@ def render_continuous_beam() -> None:
         except Exception as e:
             st.error(f"Lỗi tính toán: {e}")
             result_cb = None
-    if x < 0 or x > span_lengths[i]:
-        st.error(
-            f"Nhịp {i + 1}: x_local={x} vượt quá chiều dài nhịp L={span_lengths[i]}"
-        )
+
+
     # ── Metrics ──
     if result_cb is None:
         total_L = sum(span_lengths)
@@ -758,6 +756,7 @@ def render_plane_frame() -> None:
                 if pd.isna(r.get("node")): continue
                 FramePointLoad(
                     node=int(row["node"]),
+                    Fx=float(row["Fx (kN)"]),
                     Fx=float(row["Fx (kN)"]),
                     Fy=float(row["Fy (kN)"]),
                     Mz=float(row["Mz (kNm)"])
