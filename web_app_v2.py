@@ -440,35 +440,44 @@ def render_continuous_beam() -> None:
         with st.expander(f"Nhịp {i+1}  (L = {span_lengths[i]:.2f} m)", expanded=(i == 0)):
             t1, t2, t3 = st.tabs(["Point Load", "UDL", "Point Moment"])
             with t1:
-                df_pl = st.session_state.setdefault(
-                    f"cb_pl_{i}", pd.DataFrame(columns=["P (kN)", "x_local (m)"]))
-                st.data_editor(
+                st.session_state.setdefault(
+                    f"cb_pl_{i}",
+                    pd.DataFrame(columns=["P (kN)", "x_local (m)"])
+                )
+
+                df_pl = st.data_editor(
                     st.session_state[f"cb_pl_{i}"],
                     key=f"cb_pl_ed_{i}",
                     **cfg
                 )
 
-                df_pl = st.session_state[f"cb_pl_{i}"]
+                st.session_state[f"cb_pl_{i}"] = df_pl
             with t2:
-                df_udl = st.session_state.setdefault(
-                    f"cb_udl_{i}", pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"]))
-                st.data_editor(
+                st.session_state.setdefault(
+                    f"cb_udl_{i}",
+                    pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"])
+                )
+
+                df_udl = st.data_editor(
                     st.session_state[f"cb_udl_{i}"],
                     key=f"cb_udl_ed_{i}",
                     **cfg
                 )
 
-                df_udl = st.session_state[f"cb_udl_{i}"]
+                st.session_state[f"cb_udl_{i}"] = df_udl
             with t3:
-                df_pm = st.session_state.setdefault(
-                    f"cb_pm_{i}", pd.DataFrame(columns=["M (kNm)", "x_local (m)"]))
-                st.data_editor(
+                st.session_state.setdefault(
+                    f"cb_pm_{i}",
+                    pd.DataFrame(columns=["M (kNm)", "x_local (m)"])
+                )
+
+                df_pm = st.data_editor(
                     st.session_state[f"cb_pm_{i}"],
                     key=f"cb_pm_ed_{i}",
                     **cfg
                 )
 
-                df_pm = st.session_state[f"cb_pm_{i}"]
+                st.session_state[f"cb_pm_{i}"] = df_pm
 
             span_pl.append(clean_rows(df_pl,  ["P (kN)", "x_local (m)"]))
             span_udl.append(clean_rows(df_udl, ["q (kN/m)", "x1_local (m)", "x2_local (m)"]))
@@ -490,6 +499,9 @@ def render_continuous_beam() -> None:
             supports_def = [SupportDef(node=i, kind=support_kinds[i])
                             for i in range(n_nodes_boundary)
                             if support_kinds[i] != "free"]
+            st.write("DEBUG POINT LOADS =", span_pl)
+            st.write("DEBUG UDL =", span_udl)
+            st.write("DEBUG MOMENTS =", span_pm)
             cb_input = ContinuousBeamInput(spans=spans_def, supports=supports_def)
             result_cb = solve_continuous_beam(cb_input)
             st.session_state.cb_result = result_cb
@@ -497,7 +509,10 @@ def render_continuous_beam() -> None:
         except Exception as e:
             st.error(f"Lỗi tính toán: {e}")
             result_cb = None
-
+    if x < 0 or x > span_lengths[i]:
+        st.error(
+            f"Nhịp {i + 1}: x_local={x} vượt quá chiều dài nhịp L={span_lengths[i]}"
+        )
     # ── Metrics ──
     if result_cb is None:
         total_L = sum(span_lengths)
