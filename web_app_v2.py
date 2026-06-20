@@ -576,18 +576,17 @@ def render_continuous_beam() -> None:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
-                # Gọi hàm dựng khung dầm nền nguyên bản (Tuyệt đối SẠCH LỰC)
+                # 1. Gọi hàm dựng khung dầm nền nguyên bản (Đảm bảo SẠCH LỰC ngoại lực)
                 fig_el = _cb_draw_base_beam_and_supports(total_L_plot, span_lengths, support_kinds)
 
-                # SỬA TẠI ĐÂY: Đồng bộ nới lề dưới cho biểu đồ chuyển vị
+                # 2. Cập nhật lại tiêu đề đồ thị võng
                 fig_el.update_layout(
-                    title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}},
-                    margin=dict(l=55, r=20, t=60, b=80)  # Tăng b lên 80 để không mất chân sàn
+                    title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}}
                 )
 
-                # Tính toán và vẽ đường cong võng đè lên dầm nền công trình
+                # 3. Tính toán và vẽ đường cong võng (Thu tỉ lệ hiển thị xuống 0.6 để không lấn sân gối đỡ)
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
-                y_vis = -result_cb.deflection * (0.72 / mw)
+                y_vis = -result_cb.deflection * (0.6 / mw)
 
                 fig_el.add_trace(go.Scatter(
                     x=result_cb.x_global, y=y_vis, mode="lines",
@@ -596,10 +595,18 @@ def render_continuous_beam() -> None:
                     customdata=result_cb.deflection
                 ))
 
-                # Ép trục hiển thị không cắt biên
-                fig_el.update_yaxes(range=[-1.2, 1.05], autorange=False, showticklabels=True,
-                                    title="Deflection (visual)")
+                # 4. ÉP TRỤC Y CÙNG TỶ LỆ TUYỆT ĐỐI VỚI LOAD DIAGRAM
+                fig_el.update_yaxes(
+                    range=[-1.6, 1.2],
+                    fixedrange=True,
+                    showticklabels=True,
+                    title="Deflection (visual)"
+                )
                 st.plotly_chart(fig_el, use_container_width=True)
+            else:
+                fig_empty = base_figure("Elastic Curve", total_L_plot, "Deflection")
+                fig_empty.update_yaxes(range=[-1.6, 1.2], fixedrange=True)
+                st.plotly_chart(fig_empty, use_container_width=True)
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
@@ -608,16 +615,15 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
     """Hàm bổ trợ chuyên biệt: Chỉ vẽ trục dầm và các gối đỡ, nới rộng khung để không bao giờ mất chân"""
     fig = base_figure("Dầm liên tục", total_L)
 
-    # 1. Đặt khoảng trống lề dưới rộng rãi
+    # Ép khoảng trống lề dưới rộng rãi để chứa nhãn và chân sàn
     fig.update_layout(
         margin=dict(l=55, r=20, t=60, b=75),
     )
 
-    # 2. KHẮC PHỤC TRIỆT ĐỂ: Ép cố định trục Y không cho phép tự co giãn theo dữ liệu (fixedrange=True)
-    # Cấu hình range xuống hẳn -1.6 để tạo một khoảng trống "bảo hiểm" cực rộng dưới mặt sàn y=-0.44
+    # KHÓA CHỨNG TỶ LỆ TRỤC Y: Đảm bảo đồng bộ dải hiển thị trên mọi biểu đồ
     fig.update_yaxes(
         range=[-1.6, 1.2],
-        fixedrange=True,
+        fixedrange=True,  # Chặn Plotly tự ý co giãn làm méo/mất chân gối
         showticklabels=False,
         title=""
     )
@@ -633,7 +639,7 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
         fig.add_annotation(x=mid, y=0.15, text=f"L{i + 1}={Ls:.1f}m", showarrow=False, font={"size": 10})
         x_acc += Ls
 
-    # Vẽ hệ thống gối đỡ chuẩn kích thước độc lập pixel
+    # Vẽ hệ thống gối đỡ
     node_xs = [0.0] + list(np.cumsum(span_lengths))
     for i, kind in enumerate(support_kinds):
         xp = node_xs[i]
@@ -669,7 +675,7 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
             fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
                           fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
-        # Đẩy nhãn N0, N1 lên y=-0.65 để nằm gọn gàng ngay dưới mặt sàn phẳng màu đỏ
+        # Đặt nhãn tên nút nằm an toàn dưới sàn phẳng
         fig.add_annotation(x=xp, y=-0.65, text=f"N{i}", showarrow=False, font={"size": 10, "color": COLOR_SUP})
 
     return fig
