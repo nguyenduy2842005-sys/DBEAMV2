@@ -17,7 +17,6 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import row
 import streamlit as st
 
 from beam_core import BeamInput, BeamResult, solve_beam
@@ -91,11 +90,11 @@ def inject_css() -> None:
 
 def clean_rows(df: pd.DataFrame, columns: Iterable[str]) -> list[tuple[float, ...]]:
     rows: list[tuple[float, ...]] = []
-    for _, row in df.iterrows():
+    for _, _row in df.iterrows():
         values: list[float] = []
         skip = False
         for col in columns:
-            v = row.get(col)
+            v = _row.get(col)
             if v is None or pd.isna(v) or v == "":
                 skip = True; break
             try:
@@ -138,8 +137,50 @@ def metric_html(values: list[tuple[str, str]]) -> None:
     st.markdown(f"<div class='metric-strip'>{cards}</div>", unsafe_allow_html=True)
 
 
+def report_panel(report_text: str | None, report_title: str, key_prefix: str) -> None:
+    """
+    Hiển thị thuyết minh tính toán RÕ RÀNG trên giao diện trước,
+    sau đó mới cho phép xuất file — đúng luồng: xem & xác nhận → xuất.
+    """
+    st.subheader("📋 Thuyết minh tính toán")
+
+    if not report_text:
+        st.info("Chưa có kết quả. Nhấn **▶ Solve** để tính toán và xem thuyết minh.")
+        return
+
+    # Hiển thị report dạng khối code lớn, dễ đọc, cuộn được — rõ hơn nhiều so với text_area nhỏ
+    st.code(report_text, language=None, line_numbers=False)
+
+    st.markdown("---")
+    st.caption("✅ Đọc kỹ thuyết minh ở trên. Nếu kết quả hợp lý, bạn có thể xuất file bên dưới.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "⬇️ Xuất .txt",
+            data=report_text.encode("utf-8"),
+            file_name=f"{key_prefix}_report.txt",
+            mime="text/plain",
+            use_container_width=True,
+            key=f"{key_prefix}_dl_txt",
+        )
+    with c2:
+        try:
+            docx_bytes = build_docx_bytes(report_text, report_title)
+            st.download_button(
+                "⬇️ Xuất .docx",
+                data=docx_bytes,
+                file_name=f"{key_prefix}_report.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key=f"{key_prefix}_dl_docx",
+            )
+        except ImportError:
+            st.info("Cài python-docx để xuất .docx: `pip install python-docx`")
+
+
 def export_buttons(report_text: str, report_title: str, key_prefix: str) -> None:
-    """Render two download buttons: .txt and .docx"""
+    """Giữ lại để tương thích ngược — chỉ render 2 nút xuất (không hiển thị report)."""
     c1, c2 = st.columns(2)
     with c1:
         st.download_button(
@@ -373,11 +414,7 @@ def render_single_beam() -> None:
             use_container_width=True)
         with d: st.plotly_chart(plot_elastic_single(data, result), use_container_width=True)
     with right:
-        st.subheader("📋 Thuyết minh tính toán")
-        rpt = result.report if result else "Chưa có kết quả. Nhấn Solve để tính."
-        st.text_area("Report", rpt, height=620, key="sb_rpt_area")
-        if result:
-            export_buttons(rpt, "Thuyết Minh — Dầm Đơn", "single_beam")
+        report_panel(result.report if result else None, "Thuyết Minh — Dầm Đơn", "single_beam")
 
 
 # ══════════════════════════════════════════════════════
@@ -500,9 +537,6 @@ def render_continuous_beam() -> None:
             supports_def = [SupportDef(node=i, kind=support_kinds[i])
                             for i in range(n_nodes_boundary)
                             if support_kinds[i] != "free"]
-            st.write("DEBUG POINT LOADS =", span_pl)
-            st.write("DEBUG UDL =", span_udl)
-            st.write("DEBUG MOMENTS =", span_pm)
             cb_input = ContinuousBeamInput(spans=spans_def, supports=supports_def)
             result_cb = solve_continuous_beam(cb_input)
             st.session_state.cb_result = result_cb
@@ -582,11 +616,7 @@ def render_continuous_beam() -> None:
                                 use_container_width=True)
 
     with right:
-        st.subheader("📋 Thuyết minh tính toán")
-        rpt = result_cb.report if result_cb else "Chưa có kết quả. Nhấn Solve để tính."
-        st.text_area("Report", rpt, height=620, key="cb_rpt_area")
-        if result_cb:
-            export_buttons(rpt, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
+        report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
 
 def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -> go.Figure:
@@ -715,13 +745,8 @@ def render_plane_frame() -> None:
                                       "Fy (kN)": pd.Series(dtype=float),
                                       "Mz (kNm)": pd.Series(dtype=float)})
         df_nload = st.session_state.setdefault("pf_nloads", df_nload_def)
-        st.data_editor(
-            st.session_state["pf_nloads"],
-            key="pf_nl_ed",
-            **cfg
-        )
-
-        df_nload = st.session_state["pf_nloads"]
+        df_nload = st.data_editor(df_nload, key="pf_nl_ed", **cfg)
+        st.session_state["pf_nloads"] = df_nload
 
     with tab_udl_el:
         st.caption("UDL phân bố trên phần tử (nhập vào cột 'udl_local' trong bảng Elements)")
@@ -755,12 +780,12 @@ def render_plane_frame() -> None:
             pls = []
             for _, r in df_nload.iterrows():
                 if pd.isna(r.get("node")): continue
-                FramePointLoad(
-                    node=int(row["node"]),
-                    Fx=float(row["Fx (kN)"]),
-                    Fy=float(row["Fy (kN)"]),
-                    Mz=float(row["Mz (kNm)"])
-                )
+                pls.append(FramePointLoad(
+                    node=int(r["node"]),
+                    Fx=float(r.get("Fx (kN)", 0) or 0),
+                    Fy=float(r.get("Fy (kN)", 0) or 0),
+                    Mz=float(r.get("Mz (kNm)", 0) or 0),
+                ))
             pf_input = PlaneFrameInput(nodes=nodes, elements=elems, supports=sups, point_loads=pls)
             result_pf = solve_plane_frame(pf_input)
             st.session_state.pf_result = result_pf
@@ -804,11 +829,7 @@ def render_plane_frame() -> None:
             st.plotly_chart(_pf_diagram_plot(result_pf, "axial", "AFD"),
                             use_container_width=True)
     with right:
-        st.subheader("📋 Thuyết minh tính toán")
-        rpt = result_pf.report if result_pf else "Chưa có kết quả. Nhấn Solve để tính."
-        st.text_area("Report", rpt, height=620, key="pf_rpt_area")
-        if result_pf:
-            export_buttons(rpt, "Thuyết Minh — Khung Phẳng", "plane_frame")
+        report_panel(result_pf.report if result_pf else None, "Thuyết Minh — Khung Phẳng", "plane_frame")
 
 
 def _pf_geometry_plot(df_nodes, df_el, df_sup, result_pf: PlaneFrameResult | None) -> go.Figure:
