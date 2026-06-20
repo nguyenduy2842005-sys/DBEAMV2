@@ -39,6 +39,9 @@ COLOR_BEAM  = "#7a7f85"
 COLOR_SUP   = "#ef1d14"
 
 def base_figure(title, length, y_title=""):
+
+    margin_x = max(length * 0.06, 0.5)
+
     fig = go.Figure()
 
     fig.update_layout(
@@ -46,30 +49,46 @@ def base_figure(title, length, y_title=""):
             text=f"<b>{title}</b>",
             x=0.5,
             xanchor="center",
-            font=dict(size=15)
+            font=dict(size=14)
         ),
-        height=PLOT_HEIGHT,
-        margin=dict(l=55, r=20, t=60, b=45),
+
+        height=315,
+
+        margin=dict(
+            l=55,
+            r=20,
+            t=60,
+            b=75
+        ),
+
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
 
         xaxis=dict(
             title="x (m)",
-            range=[0, length],
+            range=[
+                -margin_x,
+                length + margin_x
+            ],
             zeroline=True,
-            mirror=True
+            mirror=True,
+            showgrid=True,
+            linecolor="gray",
+            gridcolor="rgba(128,128,128,0.2)"
         ),
 
         yaxis=dict(
             title=y_title,
+            range=[-1.5,1.2],
             zeroline=True,
-            mirror=True
+            mirror=True,
+            showgrid=True,
+            linecolor="gray",
+            gridcolor="rgba(128,128,128,0.2)"
         )
     )
 
-    fig.update_xaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
-    fig.update_yaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
     return fig
 def synced_figure(title, length, y_range=(-1.5, 1.2), y_title=""):
     margin_x = max(length * 0.06, 0.5)
@@ -116,15 +135,15 @@ def synced_figure(title, length, y_range=(-1.5, 1.2), y_title=""):
         linecolor="gray",
         gridcolor="rgba(128,128,128,0.2)"
     )
-    def single_synced_plot(title, length, y_title=""):
+    return fig
+
+def single_synced_plot(title, length, y_title=""):
         return synced_figure(
             title,
             length,
             y_range=(-1.5, 1.2),
             y_title=y_title
         )
-    return fig
-
 
 # ══════════════════════════════════════════════════════
 #  PAGE CONFIG & ADAPTIVE CSS
@@ -335,7 +354,12 @@ def draw_supports_single(fig: go.Figure, data: BeamInput) -> None:
 def plot_load_diagram_single(data: BeamInput) -> go.Figure:
     l = data.length
     fig = base_figure("Load diagram", l)
-    fig.update_yaxes(range=[-1.2, 1.05], showticklabels=False, title="")
+    fig.update_yaxes(
+        range=[-1.5, 1.2],
+        fixedrange=True,
+        showticklabels=False,
+        title=""
+    )
     fig.add_trace(go.Scatter(x=[0, l], y=[0, 0], mode="lines",
                              line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
     draw_supports_single(fig, data)
@@ -387,7 +411,6 @@ def plot_bmd_single(result: BeamResult) -> go.Figure:
         float(result.x[-1]),
         "Moment (kNm)"
     )
-
     fig.add_trace(go.Scatter(
         x=result.x,
         y=result.moment,
@@ -397,11 +420,11 @@ def plot_bmd_single(result: BeamResult) -> go.Figure:
             "color": COLOR_BMD,
             "width": 2
         },
-        fillcolor="rgba(255,43,138,0.22)",
+        fillcolor="rgba(255,43,43,0.22)",
         hovertemplate=
         "x=%{x:.2f}m  M=%{y:.2f}kNm<extra></extra>"
     ))
-
+    fig.update_yaxes(autorange="reversed")
     return fig
 
 
@@ -415,7 +438,7 @@ def plot_elastic_single(data: BeamInput, result: BeamResult | None) -> go.Figure
     if result is not None:
         # Tính toán tỷ lệ trực quan cho đường cong võng
         mw = float(np.max(np.abs(result.deflection)))
-        y = -result.deflection * (0.72 / mw) if mw > 0 else result.deflection
+        y = -result.deflection * (0.65 / mw) if mw > 0 else result.deflection
 
         # Thêm đường cong võng đè lên trên thanh dầm
         fig.add_trace(go.Scatter(
@@ -425,7 +448,11 @@ def plot_elastic_single(data: BeamInput, result: BeamResult | None) -> go.Figure
             customdata=result.deflection
         ))
 
-    fig.update_yaxes(range=[-1.2, 1.05], title="Deflection (visual)")
+    fig.update_yaxes(
+        range=[-1.5, 1.2],
+        fixedrange=True,
+        title="Deflection (visual)"
+    )
     return fig
 
 
@@ -949,15 +976,13 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
             # q dương: hướng xuống vào dầm
             # q âm: hướng lên vào dầm
             if q > 0:
-                y_load = -0.45
+                y_load = -0.58
                 arrow_start = -0.75
-                arrow_end = -0.05
+                arrow_end = -0.06
             else:
-                y_load = 0.45
+                y_load = 0.58
                 arrow_start = 0.75
-                arrow_end = 0.05
-
-
+                arrow_end = 0.06
             # vùng tải
             fig.add_trace(
                 go.Scatter(
@@ -1050,37 +1075,68 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                 )
             )
 
-
-
         # -------------------------------
-        # POINT MOMENT
+        # POINT MOMENT (ký hiệu moment chuẩn)
         # -------------------------------
         if span_pm is not None:
 
-            for M,x_local in span_pm[i]:
+            for M, x_local in span_pm[i]:
 
                 xm = x0_span + x_local
 
+                r = total_L * 0.025  # bán kính vòng moment
+                y0 = 0.25
 
-                # vòng cung moment
-                direction = 1 if M>0 else -1
+                # góc tạo vòng cung
+                if M > 0:
+                    theta = np.linspace(np.pi * 0.25, np.pi * 1.75, 40)
+                else:
+                    theta = np.linspace(-np.pi * 0.75, np.pi * 0.75, 40)
 
+                x_arc = xm + r * np.cos(theta)
+                y_arc = y0 + r * np.sin(theta)
 
-                fig.add_annotation(
-                    x=xm,
-                    y=0.35,
-                    text="↺" if direction>0 else "↻",
-                    showarrow=False,
-                    font=dict(
-                        size=24,
-                        color="#ff2b8a"
+                # vòng cung
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_arc,
+                        y=y_arc,
+                        mode="lines",
+                        line=dict(
+                            color="#ff2b8a",
+                            width=2.5
+                        ),
+                        hoverinfo="skip"
                     )
                 )
 
+                # mũi tên ở cuối vòng cung
+                xe = x_arc[-1]
+                ye = y_arc[-1]
+
+                dx = x_arc[-1] - x_arc[-2]
+                dy = y_arc[-1] - y_arc[-2]
 
                 fig.add_annotation(
+                    x=xe,
+                    y=ye,
+                    ax=xe - dx * 3,
+                    ay=ye - dy * 3,
+                    xref="x",
+                    yref="y",
+                    axref="x",
+                    ayref="y",
+                    showarrow=True,
+                    arrowhead=3,
+                    arrowsize=1.2,
+                    arrowwidth=2,
+                    arrowcolor="#ff2b8a"
+                )
+
+                # trị số moment
+                fig.add_annotation(
                     x=xm,
-                    y=0.65,
+                    y=y0 + r * 1.8,
                     text=f"{M:.1f} kNm",
                     showarrow=False,
                     font=dict(
@@ -1088,8 +1144,6 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                         color="#ff2b8a"
                     )
                 )
-
-
     return fig
 # ══════════════════════════════════════════════════════
 #  ── TAB 3: PLANE FRAME ──────────────────────────────
