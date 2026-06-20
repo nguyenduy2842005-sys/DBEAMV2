@@ -880,3 +880,24 @@ def build_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toán")
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+def build_docx_bytes(text: str, title: str = "Report"):
+    try:
+        from docx import Document
+    except ImportError:
+        raise ImportError(
+            "Cần cài python-docx: pip install python-docx"
+        )
+
+    doc = Document()
+
+    doc.add_heading(title, level=1)
+
+    for line in text.split("\n"):
+        doc.add_paragraph(line)
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
