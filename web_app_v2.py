@@ -375,16 +375,19 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
 
 def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
     """
-    Fallback dùng Matplotlib nếu kaleido không khả dụng.
-    Cố gắng giữ màu và fill.
+    Fallback dùng Matplotlib, vẽ lại tất cả trace, annotation, shape.
+    Cố gắng tái tạo giống nhất có thể (không cần Chrome).
     """
     try:
         import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        from matplotlib.path import Path
         import io
         import numpy as np
 
         plt.figure(figsize=(8, 4.5))
 
+        # 1. Vẽ các trace (đường, fill)
         for tr in fig.data:
             if hasattr(tr, 'x') and hasattr(tr, 'y') and tr.x is not None and tr.y is not None:
                 try:
@@ -393,16 +396,61 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                     color = tr.line.color if hasattr(tr, 'line') and tr.line else '#0000ff'
                     linewidth = tr.line.width if hasattr(tr, 'line') and tr.line else 1.5
 
-                    # Vẽ đường
                     plt.plot(x, y, color=color, linewidth=linewidth)
 
-                    # Nếu có fill "tozeroy"
                     if hasattr(tr, 'fill') and tr.fill == 'tozeroy':
                         plt.fill_between(x, y, 0, color=color, alpha=0.2)
+                    elif hasattr(tr, 'fill') and tr.fill == 'toself':
+                        plt.fill(x, y, color=color, alpha=0.2)
                 except Exception:
                     pass
 
-        # Tiêu đề và trục
+        # 2. Vẽ các shape (ví dụ: ngàm, tam giác gối)
+        if fig.layout.shapes:
+            for sh in fig.layout.shapes:
+                try:
+                    if sh.type == 'rect':
+                        x0 = sh.x0 if sh.x0 is not None else 0
+                        x1 = sh.x1 if sh.x1 is not None else 0
+                        y0 = sh.y0 if sh.y0 is not None else 0
+                        y1 = sh.y1 if sh.y1 is not None else 0
+                        rect = patches.Rectangle(
+                            (x0, y0), x1 - x0, y1 - y0,
+                            facecolor=sh.fillcolor if sh.fillcolor else 'gray',
+                            edgecolor=sh.line.color if sh.line else 'black',
+                            linewidth=sh.line.width if sh.line else 1
+                        )
+                        plt.gca().add_patch(rect)
+                except Exception:
+                    pass
+
+        # 3. Vẽ các annotation (mũi tên, text)
+        if fig.layout.annotations:
+            for ann in fig.layout.annotations:
+                try:
+                    # Text
+                    if ann.text and not ann.showarrow:
+                        x = ann.x if ann.x is not None else 0
+                        y = ann.y if ann.y is not None else 0
+                        plt.text(x, y, ann.text,
+                                 fontsize=ann.font.size if ann.font else 10,
+                                 color=ann.font.color if ann.font else 'black',
+                                 ha=ann.xanchor if ann.xanchor else 'center',
+                                 va=ann.yanchor if ann.yanchor else 'center')
+                    # Arrow
+                    if ann.showarrow:
+                        x0 = ann.x if ann.x is not None else 0
+                        y0 = ann.y if ann.y is not None else 0
+                        x1 = ann.ax if ann.ax is not None else 0
+                        y1 = ann.ay if ann.ay is not None else 0
+                        plt.annotate('', xy=(x1, y1), xytext=(x0, y0),
+                                     arrowprops=dict(arrowstyle='->',
+                                                     color=ann.arrowcolor if ann.arrowcolor else 'black',
+                                                     lw=ann.arrowwidth if ann.arrowwidth else 1))
+                except Exception:
+                    pass
+
+        # 4. Tiêu đề và trục
         title = fig.layout.title.text if fig.layout.title else ''
         plt.title(title)
         if fig.layout.xaxis and fig.layout.xaxis.title:
@@ -410,6 +458,12 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
         if fig.layout.yaxis and fig.layout.yaxis.title:
             plt.ylabel(fig.layout.yaxis.title.text)
         plt.grid(True)
+
+        # Đồng bộ tỉ lệ trục nếu có
+        if fig.layout.xaxis and fig.layout.xaxis.range:
+            plt.xlim(fig.layout.xaxis.range)
+        if fig.layout.yaxis and fig.layout.yaxis.range:
+            plt.ylim(fig.layout.yaxis.range)
 
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
