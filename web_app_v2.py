@@ -438,22 +438,28 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
         tx = x_arc[-1] - x_arc[-3]
         ty = y_arc[-1] - y_arc[-3]
 
+        length = math.sqrt(tx ** 2 + ty ** 2)
+
+        tx /= length
+        ty /= length
+
+        arrow_len = l * 0.06
+
         fig.add_annotation(
             x=xe,
             y=ye,
-            ax=xe - tx * 0.35,
-            ay=ye - ty * 0.35,
+            ax=xe - tx * arrow_len,
+            ay=ye - ty * arrow_len,
             xref="x",
             yref="y",
             axref="x",
             ayref="y",
             showarrow=True,
             arrowhead=3,
-            arrowsize=1.4,
+            arrowsize=1.1,
             arrowwidth=2,
             arrowcolor="#ff2b8a"
         )
-
         # giá trị moment
         fig.add_annotation(
             x=xp,
@@ -1182,34 +1188,40 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                     )
                 )
 
-                # MŨI TÊN MOMENT (SỬA)
+                # MŨI TÊN MOMENT ĐỒNG BỘ VỚI TẢI LỰC
                 # ===============================
 
                 xe = x_arc[-1]
                 ye = y_arc[-1]
 
-                # vector tiếp tuyến cuối cung
+                # vector tiếp tuyến
                 tx = x_arc[-1] - x_arc[-3]
                 ty = y_arc[-1] - y_arc[-3]
 
-                scale = 0.35
+                # chuẩn hóa vector
+                length = math.sqrt(tx ** 2 + ty ** 2)
+
+                tx /= length
+                ty /= length
+
+                # chiều dài mũi tên giống point load
+                arrow_len = total_L * 0.06
 
                 fig.add_annotation(
                     x=xe,
                     y=ye,
-                    ax=xe - tx * scale,
-                    ay=ye - ty * scale,
+                    ax=xe - tx * arrow_len,
+                    ay=ye - ty * arrow_len,
                     xref="x",
                     yref="y",
                     axref="x",
                     ayref="y",
                     showarrow=True,
                     arrowhead=3,
-                    arrowsize=1.4,
-                    arrowwidth=2.5,
+                    arrowsize=1.1,
+                    arrowwidth=2,
                     arrowcolor="#ff2b8a"
                 )
-
                 # trị số moment
                 fig.add_annotation(
                     x=xm,
