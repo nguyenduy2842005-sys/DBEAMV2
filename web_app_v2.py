@@ -109,100 +109,21 @@ def clean_rows(df: pd.DataFrame, columns: Iterable[str]) -> list[tuple[float, ..
     return rows
 
 
-def safe_data_editor(widget_key: str, default_df: pd.DataFrame, **editor_kwargs) -> pd.DataFrame:
-    """
-    Wrapper an toàn quanh st.data_editor để tránh lỗi "phải nhập 2-3 lần mới ăn".
-
-    NGUYÊN NHÂN GỐC của lỗi: nếu ta đọc giá trị đã chỉnh sửa của widget rồi lại
-    truyền NGƯỢC nó làm `value=` cho chính widget đó ở lần render kế tiếp,
-    Streamlit hiểu nhầm rằng "dữ liệu nguồn vừa bị thay đổi từ bên ngoài" và sẽ
-    hủy bỏ phần state nháp (draft) đang gõ dở — đặc biệt rõ với num_rows="dynamic"
-    khi thêm dòng mới: cột số thứ tự bị xóa trước, rồi đến cột tiếp theo, v.v.
-
-    CÁCH SỬA: `value=` luôn luôn là DataFrame KHỞI TẠO CỐ ĐỊNH (chỉ set 1 lần
-    duy nhất, không bao giờ ghi đè bằng giá trị đã edit). Toàn bộ chỉnh sửa của
-    người dùng được Streamlit tự lưu vào st.session_state[widget_key] — ta chỉ
-    ĐỌC giá trị mới nhất từ đó sau khi widget đã chạy xong, không bao giờ "vòng"
-    nó trở lại làm input.
-    """
-    seed_key = f"{widget_key}__seed"
-    if seed_key not in st.session_state:
-        st.session_state[seed_key] = default_df.copy()
-
-    # value= luôn trỏ tới bản seed bất biến — KHÔNG BAO GIỜ là kết quả đã edit
-    st.data_editor(st.session_state[seed_key], key=widget_key, **editor_kwargs)
-
-    # Đọc giá trị mới nhất (đã áp dụng chỉnh sửa của người dùng) trực tiếp
-    # từ state nội bộ của widget — đây là nguồn sự thật duy nhất.
-    edited = st.session_state.get(widget_key)
-    if isinstance(edited, pd.DataFrame):
-        return edited
-
-    # data_editor trả về dict diff {"edited_rows":..,"added_rows":..,"deleted_rows":..}
-    # khi đọc qua session_state ở một số phiên bản Streamlit — áp dụng thủ công.
-    base = st.session_state[seed_key].copy()
-    if isinstance(edited, dict):
-        for ridx, changes in edited.get("edited_rows", {}).items():
-            for col, val in changes.items():
-                base.loc[int(ridx), col] = val
-        for new_row in edited.get("added_rows", []):
-            base = pd.concat([base, pd.DataFrame([new_row])], ignore_index=True)
-        deleted = sorted(edited.get("deleted_rows", []), reverse=True)
-        if deleted:
-            base = base.drop(index=deleted).reset_index(drop=True)
-    return base
-
-
-def reset_keys_with_prefix(*prefixes: str) -> None:
-    """Xóa mọi session_state key bắt đầu bằng một trong các prefix cho trước
-    (bao gồm cả các key '__seed' và '_ed' nội bộ của safe_data_editor)."""
-    for k in list(st.session_state.keys()):
-        if any(k.startswith(p) for p in prefixes):
-            st.session_state.pop(k, None)
-
-
-def base_figure(
-    title: str,
-    x_range: float,
-    y_title: str = ""
-) -> go.Figure:
+def base_figure(title: str, x_range: float, y_title: str = "") -> go.Figure:
     fig = go.Figure()
-
     fig.update_layout(
-        title=dict(
-            text=f"<b>{title}</b>",
-            x=0.5,
-            xanchor="center",
-            y=0.98,
-            yanchor="top",
-            font=dict(size=15, color=AXIS),
-        ),
+        title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center",
+                   y=0.98, yanchor="top", font=dict(size=15, color=AXIS)),
         height=PLOT_HEIGHT,
         margin=dict(l=55, r=20, t=60, b=45),
-        paper_bgcolor=PLOT_BG,
-        plot_bgcolor=PLOT_BG,
+        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
         showlegend=False,
-        xaxis=dict(
-            title="x (m)",
-            range=[-x_range / 20, 1.05 * x_range],
-            gridcolor=GRID,
-            zerolinecolor=AXIS,
-            linecolor=AXIS,
-            mirror=True,
-            ticks="outside",
-            title_font=dict(size=13),
-        ),
-        yaxis=dict(
-            title=y_title,
-            gridcolor=GRID,
-            zerolinecolor=AXIS,
-            linecolor=AXIS,
-            mirror=True,
-            ticks="outside",
-            title_font=dict(size=13),
-        ),
+        xaxis=dict(title="x (m)", range=[-x_range/20, 1.05*x_range],
+                   gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS,
+                   mirror=True, ticks="outside", title_font=dict(size=13)),
+        yaxis=dict(title=y_title, gridcolor=GRID, zerolinecolor=AXIS,
+                   linecolor=AXIS, mirror=True, ticks="outside", title_font=dict(size=13)),
     )
-
     return fig
 
 
@@ -424,7 +345,8 @@ def render_single_beam() -> None:
     with st.sidebar:
         st.header("⚙️ Single Beam — Input")
         if st.button("🆕 New Model", type="primary", use_container_width=True, key="sb_new"):
-            reset_keys_with_prefix("sb_pl", "sb_pm", "sb_udl", "sb_uvl", "sb_result", "sb_input")
+            for k in ["sb_pl","sb_pm","sb_udl","sb_uvl","sb_result","sb_input"]:
+                st.session_state.pop(k, None)
             st.rerun()
         st.divider()
         length = st.number_input("Chiều dài L (m)", min_value=0.01, value=10.0, step=0.5,
@@ -443,21 +365,19 @@ def render_single_beam() -> None:
     )
 
     # Load tables
-    pl_default  = pd.DataFrame(columns=["P (kN)", "x (m)"])
-    pm_default  = pd.DataFrame(columns=["M (kNm)", "x (m)"])
-    udl_default = pd.DataFrame(columns=["q (kN/m)", "x1 (m)", "x2 (m)"])
-    uvl_default = pd.DataFrame(columns=["qmax (kN/m)", "x1 (m)", "x2 (m)"])
+    def_pl  = pd.DataFrame(columns=["P (kN)", "x (m)"])
+    def_pm  = pd.DataFrame(columns=["M (kNm)", "x (m)"])
+    def_udl = pd.DataFrame(columns=["q (kN/m)", "x1 (m)", "x2 (m)"])
+    def_uvl = pd.DataFrame(columns=["qmax (kN/m)", "x1 (m)", "x2 (m)"])
+    for k, v in [("sb_pl",def_pl),("sb_pm",def_pm),("sb_udl",def_udl),("sb_uvl",def_uvl)]:
+        st.session_state.setdefault(k, v)
 
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
     t1, t2, t3, t4 = st.tabs(["Point Load", "Point Moment", "UDL", "UVL"])
-    with t1:
-        pl = safe_data_editor("sb_pl_ed", pl_default, **cfg)
-    with t2:
-        pm = safe_data_editor("sb_pm_ed", pm_default, **cfg)
-    with t3:
-        udl = safe_data_editor("sb_udl_ed", udl_default, **cfg)
-    with t4:
-        uvl = safe_data_editor("sb_uvl_ed", uvl_default, **cfg)
+    with t1: pl  = st.data_editor(st.session_state.sb_pl,  key="sb_pl_ed",  **cfg)
+    with t2: pm  = st.data_editor(st.session_state.sb_pm,  key="sb_pm_ed",  **cfg)
+    with t3: udl = st.data_editor(st.session_state.sb_udl, key="sb_udl_ed", **cfg)
+    with t4: uvl = st.data_editor(st.session_state.sb_uvl, key="sb_uvl_ed", **cfg)
 
     data.point_loads    = clean_rows(pl,  ["P (kN)", "x (m)"])
     data.point_moments  = clean_rows(pm,  ["M (kNm)", "x (m)"])
@@ -558,23 +478,44 @@ def render_continuous_beam() -> None:
         with st.expander(f"Nhịp {i+1}  (L = {span_lengths[i]:.2f} m)", expanded=(i == 0)):
             t1, t2, t3 = st.tabs(["Point Load", "UDL", "Point Moment"])
             with t1:
-                df_pl = safe_data_editor(
-                    f"cb_pl_ed_{i}",
-                    pd.DataFrame(columns=["P (kN)", "x_local (m)"]),
-                    **cfg,
+                st.session_state.setdefault(
+                    f"cb_pl_{i}",
+                    pd.DataFrame(columns=["P (kN)", "x_local (m)"])
                 )
+
+                df_pl = st.data_editor(
+                    st.session_state[f"cb_pl_{i}"],
+                    key=f"cb_pl_ed_{i}",
+                    **cfg
+                )
+
+                st.session_state[f"cb_pl_{i}"] = df_pl
             with t2:
-                df_udl = safe_data_editor(
-                    f"cb_udl_ed_{i}",
-                    pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"]),
-                    **cfg,
+                st.session_state.setdefault(
+                    f"cb_udl_{i}",
+                    pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"])
                 )
+
+                df_udl = st.data_editor(
+                    st.session_state[f"cb_udl_{i}"],
+                    key=f"cb_udl_ed_{i}",
+                    **cfg
+                )
+
+                st.session_state[f"cb_udl_{i}"] = df_udl
             with t3:
-                df_pm = safe_data_editor(
-                    f"cb_pm_ed_{i}",
-                    pd.DataFrame(columns=["M (kNm)", "x_local (m)"]),
-                    **cfg,
+                st.session_state.setdefault(
+                    f"cb_pm_{i}",
+                    pd.DataFrame(columns=["M (kNm)", "x_local (m)"])
                 )
+
+                df_pm = st.data_editor(
+                    st.session_state[f"cb_pm_{i}"],
+                    key=f"cb_pm_ed_{i}",
+                    **cfg
+                )
+
+                st.session_state[f"cb_pm_{i}"] = df_pm
 
             span_pl.append(clean_rows(df_pl,  ["P (kN)", "x_local (m)"]))
             span_udl.append(clean_rows(df_udl, ["q (kN/m)", "x1_local (m)", "x2_local (m)"]))
@@ -771,33 +712,41 @@ def render_plane_frame() -> None:
 
     with tab_nd:
         st.caption("Tọa độ nút (x, y) — đơn vị m")
-        nodes_default = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0],
-                                       "y (m)": [0.0, 4.0, 4.0, 0.0]})
-        df_nodes = safe_data_editor("pf_nd_ed", nodes_default, **cfg)
+        df_nodes_def = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0],
+                                      "y (m)": [0.0, 4.0, 4.0, 0.0]})
+        df_nodes = st.session_state.setdefault("pf_nodes", df_nodes_def)
+        df_nodes = st.data_editor(df_nodes, key="pf_nd_ed", **cfg)
+        st.session_state["pf_nodes"] = df_nodes
 
     with tab_el:
         st.caption("Phần tử: nút đầu, nút cuối, E (kN/m²), A (m²), I (m⁴), UDL_local (kN/m)")
-        elems_default = pd.DataFrame({
+        df_el_def = pd.DataFrame({
             "i": [0, 1, 3], "j": [1, 2, 2],
             "E": [200e6]*3, "A": [0.01]*3, "I": [1e-4]*3, "udl_local": [0.0]*3
         })
-        df_el = safe_data_editor("pf_el_ed", elems_default, **cfg)
+        df_el = st.session_state.setdefault("pf_elems", df_el_def)
+        df_el = st.data_editor(df_el, key="pf_el_ed", **cfg)
+        st.session_state["pf_elems"] = df_el
 
     with tab_sup:
         st.caption("Gối: nút, ux_fixed, uy_fixed, rz_fixed (True/False)")
-        sups_default = pd.DataFrame({"node": [0, 3],
-                                      "ux": [True, True],
-                                      "uy": [True, True],
-                                      "rz": [True, True]})
-        df_sup = safe_data_editor("pf_sup_ed", sups_default, **cfg)
+        df_sup_def = pd.DataFrame({"node": [0, 3],
+                                    "ux": [True, True],
+                                    "uy": [True, True],
+                                    "rz": [True, True]})
+        df_sup = st.session_state.setdefault("pf_sups", df_sup_def)
+        df_sup = st.data_editor(df_sup, key="pf_sup_ed", **cfg)
+        st.session_state["pf_sups"] = df_sup
 
     with tab_pl_nd:
         st.caption("Tải tập trung tại nút: Fx (kN), Fy (kN), Mz (kNm)")
-        nloads_default = pd.DataFrame({"node": pd.Series(dtype=int),
-                                        "Fx (kN)": pd.Series(dtype=float),
-                                        "Fy (kN)": pd.Series(dtype=float),
-                                        "Mz (kNm)": pd.Series(dtype=float)})
-        df_nload = safe_data_editor("pf_nl_ed", nloads_default, **cfg)
+        df_nload_def = pd.DataFrame({"node": pd.Series(dtype=int),
+                                      "Fx (kN)": pd.Series(dtype=float),
+                                      "Fy (kN)": pd.Series(dtype=float),
+                                      "Mz (kNm)": pd.Series(dtype=float)})
+        df_nload = st.session_state.setdefault("pf_nloads", df_nload_def)
+        df_nload = st.data_editor(df_nload, key="pf_nl_ed", **cfg)
+        st.session_state["pf_nloads"] = df_nload
 
     with tab_udl_el:
         st.caption("UDL phân bố trên phần tử (nhập vào cột 'udl_local' trong bảng Elements)")
