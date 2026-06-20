@@ -1,12 +1,9 @@
 """
-web_app_v2.py — Beam Analysis Suite (mở rộng từ web_app.py gốc)
+web_app_v2.py — Beam Analysis Suite (Đã sửa lỗi Dark Mode & Vẽ gối Roller)
 Tabs:
   1. Single Beam     — giữ nguyên logic gốc
   2. Continuous Beam — FEM Euler-Bernoulli
   3. Plane Frame     — FEM 2D khung phẳng
-
-Yêu cầu:
-  pip install streamlit plotly numpy pandas python-docx
 """
 from __future__ import annotations
 
@@ -17,46 +14,6 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-def base_figure(title, length, y_title=""):
-    fig = go.Figure()
-
-    fig.update_layout(
-        title=dict(
-            text=f"<b>{title}</b>",
-            x=0.5,
-            xanchor="center",
-            font=dict(size=15, color=AXIS)
-        ),
-        height=PLOT_HEIGHT,
-        margin=dict(
-            l=55,
-            r=20,
-            t=60,
-            b=45
-        ),
-        paper_bgcolor=PLOT_BG,
-        plot_bgcolor=PLOT_BG,
-        showlegend=False,
-
-        xaxis=dict(
-            title="x (m)",
-            range=[0, length],
-            gridcolor=GRID,
-            zerolinecolor=AXIS,
-            linecolor=AXIS,
-            mirror=True
-        ),
-
-        yaxis=dict(
-            title=y_title,
-            gridcolor=GRID,
-            zerolinecolor=AXIS,
-            linecolor=AXIS,
-            mirror=True
-        )
-    )
-
-    return fig
 import streamlit as st
 
 from beam_core import BeamInput, BeamResult, solve_beam
@@ -70,12 +27,18 @@ from fem_core import (
 )
 
 # ══════════════════════════════════════════════════════
-#  GLOBAL CONSTANTS
+#  GLOBAL CONSTANTS & DYNAMIC THEME HELPERS
 # ══════════════════════════════════════════════════════
 PLOT_HEIGHT = 315
-PLOT_BG = "#ffffff"
-GRID     = "#d9e0e8"
-AXIS     = "#263238"
+
+# Màu sắc biểu đồ (Tự động đảo ngược nền nếu dùng Dark Mode)
+def get_plot_theme():
+    # Nhận diện màu nền hiện tại của Streamlit để đồng bộ Plotly
+    return dict(
+        bg="rgba(0,0,0,0)", # Nền trong suốt để ăn theo nền app
+        grid="#444d56" if st.get_option("theme.base") == "dark" else "#d9e0e8",
+        axis="#ffffff" if st.get_option("theme.base") == "dark" else "#263238"
+    )
 
 COLOR_SFD   = "#0b5fff"
 COLOR_BMD   = "#ff2b2b"
@@ -84,8 +47,48 @@ COLOR_AXIAL = "#9b27af"
 COLOR_BEAM  = "#7a7f85"
 COLOR_SUP   = "#ef1d14"
 
+def base_figure(title, length, y_title=""):
+    theme = get_plot_theme()
+    fig = go.Figure()
+
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{title}</b>",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=15, color=theme["axis"])
+        ),
+        height=PLOT_HEIGHT,
+        margin=dict(l=55, r=20, t=60, b=45),
+        paper_bgcolor=theme["bg"],
+        plot_bgcolor=theme["bg"],
+        showlegend=False,
+
+        xaxis=dict(
+            title="x (m)",
+            range=[0, length],
+            gridcolor=theme["grid"],
+            zerolinecolor=theme["axis"],
+            linecolor=theme["axis"],
+            titlefont=dict(color=theme["axis"]),
+            tickfont=dict(color=theme["axis"]),
+            mirror=True
+        ),
+
+        yaxis=dict(
+            title=y_title,
+            gridcolor=theme["grid"],
+            zerolinecolor=theme["axis"],
+            linecolor=theme["axis"],
+            titlefont=dict(color=theme["axis"]),
+            tickfont=dict(color=theme["axis"]),
+            mirror=True
+        )
+    )
+    return fig
+
 # ══════════════════════════════════════════════════════
-#  PAGE CONFIG & CSS
+#  PAGE CONFIG & ADAPTIVE CSS
 # ══════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Beam Analysis Suite",
@@ -94,29 +97,33 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 def inject_css() -> None:
     st.markdown("""
     <style>
-    .stApp { background: #f3f5f8; }
+    /* Xóa bỏ việc ép cứng màu nền tĩnh để tương thích với các chế độ Dark Mode ẩn */
     #MainMenu, footer, header, [data-testid="stToolbar"] { display:none !important; }
-    [data-testid="stSidebar"] { background:#ffffff; border-right:1px solid #d8dee8; }
     .block-container { padding-top:1.1rem; padding-bottom:1.5rem; max-width:1680px; }
+    
+    /* Thiết kế Metric Strip sử dụng biến CSS linh hoạt */
     .metric-strip {
         display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
         gap:10px; margin:0.2rem 0 0.8rem;
     }
     .metric-card {
-        background:#ffffff; border:1px solid #d8dee8;
+        background: var(--background-color);
+        border: 1px solid var(--secondary-background-color);
         border-radius:6px; padding:10px 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .metric-label { color:#5f6b7a; font-size:0.78rem; margin-bottom:3px; }
-    .metric-value { color:#101828; font-weight:700; font-size:1.08rem; }
+    .metric-label { color: var(--text-color); opacity: 0.7; font-size:0.78rem; margin-bottom:3px; }
+    .metric-value { color: var(--text-color); font-weight:700; font-size:1.08rem; }
+    
+    /* Đảm bảo đường viền mượt mà ở cả 2 chế độ */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background:#ffffff; border-color:#d8dee8;
+        border-color: var(--secondary-background-color);
     }
     .stPlotlyChart {
-        background:#ffffff; border:1px solid #d8dee8;
+        border: 1px solid var(--secondary-background-color);
         border-radius:6px; padding:6px;
     }
     textarea { font-family:Consolas,"Courier New",monospace !important; }
@@ -150,36 +157,15 @@ def clean_rows(df: pd.DataFrame, columns: Iterable[str]) -> list[tuple[float, ..
 
 
 def safe_data_editor(widget_key: str, default_df: pd.DataFrame, **editor_kwargs) -> pd.DataFrame:
-    """
-    Wrapper an toàn quanh st.data_editor để tránh lỗi "phải nhập 2-3 lần mới ăn".
-
-    NGUYÊN NHÂN GỐC của lỗi: nếu ta đọc giá trị đã chỉnh sửa của widget rồi lại
-    truyền NGƯỢC nó làm `value=` cho chính widget đó ở lần render kế tiếp,
-    Streamlit hiểu nhầm rằng "dữ liệu nguồn vừa bị thay đổi từ bên ngoài" và sẽ
-    hủy bỏ phần state nháp (draft) đang gõ dở — đặc biệt rõ với num_rows="dynamic"
-    khi thêm dòng mới: cột số thứ tự bị xóa trước, rồi đến cột tiếp theo, v.v.
-
-    CÁCH SỬA: `value=` luôn luôn là DataFrame KHỞI TẠO CỐ ĐỊNH (chỉ set 1 lần
-    duy nhất, không bao giờ ghi đè bằng giá trị đã edit). Toàn bộ chỉnh sửa của
-    người dùng được Streamlit tự lưu vào st.session_state[widget_key] — ta chỉ
-    ĐỌC giá trị mới nhất từ đó sau khi widget đã chạy xong, không bao giờ "vòng"
-    nó trở lại làm input.
-    """
     seed_key = f"{widget_key}__seed"
     if seed_key not in st.session_state:
         st.session_state[seed_key] = default_df.copy()
 
-    # value= luôn trỏ tới bản seed bất biến — KHÔNG BAO GIỜ là kết quả đã edit
     st.data_editor(st.session_state[seed_key], key=widget_key, **editor_kwargs)
-
-    # Đọc giá trị mới nhất (đã áp dụng chỉnh sửa của người dùng) trực tiếp
-    # từ state nội bộ của widget — đây là nguồn sự thật duy nhất.
     edited = st.session_state.get(widget_key)
     if isinstance(edited, pd.DataFrame):
         return edited
 
-    # data_editor trả về dict diff {"edited_rows":..,"added_rows":..,"deleted_rows":..}
-    # khi đọc qua session_state ở một số phiên bản Streamlit — áp dụng thủ công.
     base = st.session_state[seed_key].copy()
     if isinstance(edited, dict):
         for ridx, changes in edited.get("edited_rows", {}).items():
@@ -194,8 +180,6 @@ def safe_data_editor(widget_key: str, default_df: pd.DataFrame, **editor_kwargs)
 
 
 def reset_keys_with_prefix(*prefixes: str) -> None:
-    """Xóa mọi session_state key bắt đầu bằng một trong các prefix cho trước
-    (bao gồm cả các key '__seed' và '_ed' nội bộ của safe_data_editor)."""
     for k in list(st.session_state.keys()):
         if any(k.startswith(p) for p in prefixes):
             st.session_state.pop(k, None)
@@ -212,19 +196,12 @@ def metric_html(values: list[tuple[str, str]]) -> None:
 
 
 def report_panel(report_text: str | None, report_title: str, key_prefix: str) -> None:
-    """
-    Hiển thị thuyết minh tính toán RÕ RÀNG trên giao diện trước,
-    sau đó mới cho phép xuất file — đúng luồng: xem & xác nhận → xuất.
-    """
     st.subheader("📋 Thuyết minh tính toán")
-
     if not report_text:
         st.info("Chưa có kết quả. Nhấn **▶ Solve** để tính toán và xem thuyết minh.")
         return
 
-    # Hiển thị report dạng khối code lớn, dễ đọc, cuộn được — rõ hơn nhiều so với text_area nhỏ
     st.code(report_text, language=None, line_numbers=False)
-
     st.markdown("---")
     st.caption("✅ Đọc kỹ thuyết minh ở trên. Nếu kết quả hợp lý, bạn có thể xuất file bên dưới.")
 
@@ -253,35 +230,8 @@ def report_panel(report_text: str | None, report_title: str, key_prefix: str) ->
             st.info("Cài python-docx để xuất .docx: `pip install python-docx`")
 
 
-def export_buttons(report_text: str, report_title: str, key_prefix: str) -> None:
-    """Giữ lại để tương thích ngược — chỉ render 2 nút xuất (không hiển thị report)."""
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button(
-            "⬇️ Xuất .txt",
-            data=report_text.encode("utf-8"),
-            file_name=f"{key_prefix}_report.txt",
-            mime="text/plain",
-            use_container_width=True,
-            key=f"{key_prefix}_dl_txt",
-        )
-    with c2:
-        try:
-            docx_bytes = build_docx_bytes(report_text, report_title)
-            st.download_button(
-                "⬇️ Xuất .docx",
-                data=docx_bytes,
-                file_name=f"{key_prefix}_report.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-                key=f"{key_prefix}_dl_docx",
-            )
-        except ImportError:
-            st.info("Cài python-docx để xuất .docx: `pip install python-docx`")
-
-
 # ══════════════════════════════════════════════════════
-#  ── TAB 1: SINGLE BEAM (giữ nguyên logic gốc) ──────
+#  ── TAB 1: SINGLE BEAM ──────────────────────────────
 # ══════════════════════════════════════════════════════
 
 def validate_single(data: BeamInput) -> list[str]:
@@ -415,7 +365,6 @@ def metric_strip_single(result: BeamResult | None, data: BeamInput) -> None:
 
 
 def render_single_beam() -> None:
-    """Full UI for single beam analysis (ported from original web_app.py)."""
     with st.sidebar:
         st.header("⚙️ Single Beam — Input")
         if st.button("🆕 New Model", type="primary", use_container_width=True, key="sb_new"):
@@ -437,7 +386,6 @@ def render_single_beam() -> None:
         uvl_type="increase" if ut == "Increase" else "decrease",
     )
 
-    # Load tables
     pl_default  = pd.DataFrame(columns=["P (kN)", "x (m)"])
     pm_default  = pd.DataFrame(columns=["M (kNm)", "x (m)"])
     udl_default = pd.DataFrame(columns=["q (kN/m)", "x1 (m)", "x2 (m)"])
@@ -445,14 +393,10 @@ def render_single_beam() -> None:
 
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
     t1, t2, t3, t4 = st.tabs(["Point Load", "Point Moment", "UDL", "UVL"])
-    with t1:
-        pl = safe_data_editor("sb_pl_ed", pl_default, **cfg)
-    with t2:
-        pm = safe_data_editor("sb_pm_ed", pm_default, **cfg)
-    with t3:
-        udl = safe_data_editor("sb_udl_ed", udl_default, **cfg)
-    with t4:
-        uvl = safe_data_editor("sb_uvl_ed", uvl_default, **cfg)
+    with t1: pl = safe_data_editor("sb_pl_ed", pl_default, **cfg)
+    with t2: pm = safe_data_editor("sb_pm_ed", pm_default, **cfg)
+    with t3: udl = safe_data_editor("sb_udl_ed", udl_default, **cfg)
+    with t4: uvl = safe_data_editor("sb_uvl_ed", uvl_default, **cfg)
 
     data.point_loads    = clean_rows(pl,  ["P (kN)", "x (m)"])
     data.point_moments  = clean_rows(pm,  ["M (kNm)", "x (m)"])
@@ -509,22 +453,18 @@ def render_continuous_beam() -> None:
         n_spans = st.number_input("Số nhịp", min_value=1, max_value=20, value=2, step=1, key="cb_nspans")
         st.divider()
 
-        # Per-span geometry
         st.markdown("**Thông số từng nhịp**")
         span_lengths, span_EIs = [], []
         for i in range(int(n_spans)):
             c1, c2 = st.columns(2)
             with c1:
-                L_i = st.number_input(f"L{i+1} (m)", min_value=0.01, value=5.0, step=0.5,
-                                      format="%.2f", key=f"cb_L{i}")
+                L_i = st.number_input(f"L{i+1} (m)", min_value=0.01, value=5.0, step=0.5, format="%.2f", key=f"cb_L{i}")
             with c2:
-                EI_i = st.number_input(f"EI{i+1}", min_value=1e-6, value=1.0, step=100.0,
-                                       format="%.4g", key=f"cb_EI{i}")
+                EI_i = st.number_input(f"EI{i+1}", min_value=1e-6, value=1.0, step=100.0, format="%.4g", key=f"cb_EI{i}")
             span_lengths.append(float(L_i))
             span_EIs.append(float(EI_i))
 
         st.divider()
-        # Supports — user picks type per node
         n_nodes_boundary = int(n_spans) + 1
         st.markdown("**Gối đỡ**")
         support_kinds = []
@@ -541,35 +481,16 @@ def render_continuous_beam() -> None:
         st.divider()
         st.caption("Nhập tải trọng trong bảng ở vùng làm việc chính.")
 
-    # ── Load tables per span ──────────────────────────
     st.markdown("#### Tải trọng từng nhịp")
-    span_pl  = []   # point loads per span
-    span_udl = []
-    span_pm  = []
-
+    span_pl, span_udl, span_pm = [], [], []
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
 
     for i in range(int(n_spans)):
         with st.expander(f"Nhịp {i+1}  (L = {span_lengths[i]:.2f} m)", expanded=(i == 0)):
             t1, t2, t3 = st.tabs(["Point Load", "UDL", "Point Moment"])
-            with t1:
-                df_pl = safe_data_editor(
-                    f"cb_pl_ed_{i}",
-                    pd.DataFrame(columns=["P (kN)", "x_local (m)"]),
-                    **cfg,
-                )
-            with t2:
-                df_udl = safe_data_editor(
-                    f"cb_udl_ed_{i}",
-                    pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"]),
-                    **cfg,
-                )
-            with t3:
-                df_pm = safe_data_editor(
-                    f"cb_pm_ed_{i}",
-                    pd.DataFrame(columns=["M (kNm)", "x_local (m)"]),
-                    **cfg,
-                )
+            with t1: df_pl = safe_data_editor(f"cb_pl_ed_{i}", pd.DataFrame(columns=["P (kN)", "x_local (m)"]), **cfg)
+            with t2: df_udl = safe_data_editor(f"cb_udl_ed_{i}", pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"]), **cfg)
+            with t3: df_pm = safe_data_editor(f"cb_pm_ed_{i}", pd.DataFrame(columns=["M (kNm)", "x_local (m)"]), **cfg)
 
             span_pl.append(clean_rows(df_pl,  ["P (kN)", "x_local (m)"]))
             span_udl.append(clean_rows(df_udl, ["q (kN/m)", "x1_local (m)", "x2_local (m)"]))
@@ -582,15 +503,12 @@ def render_continuous_beam() -> None:
             spans_def = []
             for i in range(int(n_spans)):
                 spans_def.append(SpanDef(
-                    length=span_lengths[i],
-                    EI=span_EIs[i],
+                    length=span_lengths[i], EI=span_EIs[i],
                     point_loads=[(P, x) for P, x in span_pl[i]],
                     udls=[(q, x1, x2) for q, x1, x2 in span_udl[i]],
                     point_moments=[(M, x) for M, x in span_pm[i]],
                 ))
-            supports_def = [SupportDef(node=i, kind=support_kinds[i])
-                            for i in range(n_nodes_boundary)
-                            if support_kinds[i] != "free"]
+            supports_def = [SupportDef(node=i, kind=support_kinds[i]) for i in range(n_nodes_boundary) if support_kinds[i] != "free"]
             cb_input = ContinuousBeamInput(spans=spans_def, supports=supports_def)
             result_cb = solve_continuous_beam(cb_input)
             st.session_state.cb_result = result_cb
@@ -599,14 +517,9 @@ def render_continuous_beam() -> None:
             st.error(f"Lỗi tính toán: {e}")
             result_cb = None
 
-
-    # ── Metrics ──
     if result_cb is None:
         total_L = sum(span_lengths)
-        metric_html([("Tổng L", f"{total_L:.2f} m"),
-                     ("Số nhịp", str(n_spans)),
-                     ("Số gối", str(sum(1 for k in support_kinds if k != "free"))),
-                     ("Status", "Ready")])
+        metric_html([("Tổng L", f"{total_L:.2f} m"), ("Số nhịp", str(n_spans)), ("Số gối", str(sum(1 for k in support_kinds if k != "free"))), ("Status", "Ready")])
     else:
         xv = result_cb.x_global
         V, M, w = result_cb.shear, result_cb.moment, result_cb.deflection
@@ -616,58 +529,39 @@ def render_continuous_beam() -> None:
                      ("wmax/EI", f"{w[iw]:.5f} m  @x={xv[iw]:.2f}m"),
                      ("Gối", f"{len(result_cb.reactions)} phản lực")])
 
-    # ── Plots ──
     total_L_plot = sum(span_lengths)
     left, right = st.columns([1.7, 1], gap="large")
 
     with left:
-        # Load diagram
         fig_load = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds)
         a, b = st.columns(2)
-        with a:
-            st.plotly_chart(fig_load, use_container_width=True)
+        with a: st.plotly_chart(fig_load, use_container_width=True)
         with b:
             if result_cb:
                 fig_sfd = base_figure("Shear Force Diagram", total_L_plot, "V (kN)")
-                fig_sfd.add_trace(go.Scatter(
-                    x=result_cb.x_global, y=result_cb.shear, mode="lines",
-                    fill="tozeroy", line={"color": COLOR_SFD, "width": 2},
-                    fillcolor="rgba(11,95,255,0.20)",
-                    hovertemplate="x=%{x:.3f}m  V=%{y:.3f}kN<extra></extra>"))
+                fig_sfd.add_trace(go.Scatter(x=result_cb.x_global, y=result_cb.shear, mode="lines", fill="tozeroy", line={"color": COLOR_SFD, "width": 2}, fillcolor="rgba(11,95,255,0.20)", hovertemplate="x=%{x:.3f}m  V=%{y:.3f}kN<extra></extra>"))
                 st.plotly_chart(fig_sfd, use_container_width=True)
             else:
-                st.plotly_chart(base_figure("Shear Force Diagram", total_L_plot, "V (kN)"),
-                                use_container_width=True)
+                st.plotly_chart(base_figure("Shear Force Diagram", total_L_plot, "V (kN)"), use_container_width=True)
 
         c, d = st.columns(2)
         with c:
             if result_cb:
                 fig_bmd = base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)")
-                fig_bmd.add_trace(go.Scatter(
-                    x=result_cb.x_global, y=result_cb.moment, mode="lines",
-                    fill="tozeroy", line={"color": COLOR_BMD, "width": 2},
-                    fillcolor="rgba(255,43,43,0.22)",
-                    hovertemplate="x=%{x:.3f}m  M=%{y:.3f}kNm<extra></extra>"))
+                fig_bmd.add_trace(go.Scatter(x=result_cb.x_global, y=result_cb.moment, mode="lines", fill="tozeroy", line={"color": COLOR_BMD, "width": 2}, fillcolor="rgba(255,43,43,0.22)", hovertemplate="x=%{x:.3f}m  M=%{y:.3f}kNm<extra></extra>"))
                 fig_bmd.update_yaxes(autorange="reversed")
                 st.plotly_chart(fig_bmd, use_container_width=True)
             else:
-                st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"),
-                                use_container_width=True)
+                st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
                 fig_el = base_figure("Elastic Curve", total_L_plot, "Deflection (visual)")
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
                 y_vis = -result_cb.deflection * (0.72 / mw)
-                fig_el.add_trace(go.Scatter(
-                    x=result_cb.x_global, y=y_vis, mode="lines",
-                    line={"color": COLOR_ELAST, "width": 3},
-                    hovertemplate="x=%{x:.3f}m  w/EI=%{customdata:.5f}<extra></extra>",
-                    customdata=result_cb.deflection))
-                fig_el.update_yaxes(range=[-1.05, 1.05])
+                fig_el.add_trace(go.Scatter(x=result_cb.x_global, y=y_vis, mode="lines", line={"color": COLOR_ELAST, "width": 3}, hovertemplate="x=%{x:.3f}m  w/EI=%{customdata:.5f}<extra></extra>", customdata=result_cb.deflection))
                 st.plotly_chart(fig_el, use_container_width=True)
             else:
-                st.plotly_chart(base_figure("Elastic Curve", total_L_plot, "Deflection"),
-                                use_container_width=True)
+                st.plotly_chart(base_figure("Elastic Curve", total_L_plot, "Deflection"), use_container_width=True)
 
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
@@ -678,59 +572,57 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
     fig = base_figure("Load Diagram — Dầm liên tục", total_L)
     fig.update_yaxes(range=[-1.05, 1.05], showticklabels=False, title="")
 
-    # Beam line
-    fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines",
-                             line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+    # Trục dầm chính
+    fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
 
-    # Span labels
+    # Nhãn nhịp
     x_acc = 0.0
+    theme = get_plot_theme()
     for i, Ls in enumerate(span_lengths):
         mid = x_acc + Ls / 2
-        fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False,
-                           font={"size": 10, "color": "#5f6b7a"})
+        fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10, "color": theme["axis"]})
         x_acc += Ls
 
-    # Supports
-    x_acc = 0.0
+    # ── VẼ GỐI ĐỠ (ĐÃ SỬA: ĐƯỢC CHIA RÕ RÀNG PIN & ROLLER) ──
     node_xs = [0.0] + list(np.cumsum(span_lengths))
     for i, kind in enumerate(support_kinds):
         xp = node_xs[i]
-        if kind in ("pin", "roller"):
+        if kind == "pin":
+            # Gối cố định: Hình tam giác trơn
             fig.add_trace(go.Scatter(
-                x=[xp, xp + total_L/34, xp - total_L/34, xp],
-                y=[0, -0.37, -0.37, 0],
-                fill="toself", mode="lines",
-                line={"color": COLOR_SUP, "width": 1}, fillcolor=COLOR_SUP,
-                hoverinfo="skip"))
+                x=[xp, xp + total_L/34, xp - total_L/34, xp], y=[0, -0.37, -0.37, 0],
+                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
+            ))
+        elif kind == "roller":
+            # Gối di động: Hình tam giác ngắn hơn + có thanh trượt gạch ngang ở dưới đáy
+            fig.add_trace(go.Scatter(
+                x=[xp, xp + total_L/36, xp - total_L/36, xp], y=[0, -0.28, -0.28, 0],
+                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[xp - total_L/30, xp + total_L/30], y=[-0.36, -0.36],
+                mode="lines", line={"color": COLOR_SUP, "width": 3}, hoverinfo="skip"
+            ))
         elif kind == "fixed":
-            fig.add_shape(type="rect", x0=xp-total_L/80, x1=xp+total_L/80,
-                          y0=-0.42, y1=0.42, fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
-        fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False,
-                           font={"size": 9, "color": COLOR_SUP})
+            # Ngàm cứng
+            fig.add_shape(type="rect", x0=xp-total_L/80, x1=xp+total_L/80, y0=-0.42, y1=0.42, fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
-    # Loads
+        fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
+
+    # Tải trọng
     x_acc = 0.0
     for s_idx, Ls in enumerate(span_lengths):
         for P, xl in span_pl[s_idx]:
             xp = x_acc + xl
             yp, yt = (-0.06, -0.74) if P > 0 else (0.06, 0.74)
-            fig.add_annotation(x=xp, y=yp, ax=xp, ay=yt, xref="x", yref="y",
-                               axref="x", ayref="y", showarrow=True,
-                               arrowhead=3, arrowsize=1.0, arrowwidth=2, arrowcolor=COLOR_SFD, text="")
-            fig.add_annotation(x=xp, y=yt*1.05, text=f"{P:g}kN", showarrow=False,
-                               font={"size": 10, "color": COLOR_SFD})
+            fig.add_annotation(x=xp, y=yp, ax=xp, ay=yt, xref="x", yref="y", axref="x", ayref="y", showarrow=True, arrowhead=3, arrowsize=1.0, arrowwidth=2, arrowcolor=COLOR_SFD, text="")
+            fig.add_annotation(x=xp, y=yt*1.05, text=f"{P:g}kN", showarrow=False, font={"size": 10, "color": COLOR_SFD})
         for q, x1, x2 in span_udl[s_idx]:
             xg1, xg2 = x_acc + x1, x_acc + x2
             yb = -0.58 if q > 0 else 0.58
-            fig.add_trace(go.Scatter(x=[xg1, xg2, xg2, xg1, xg1], y=[0, 0, yb, yb, 0],
-                                     fill="toself", mode="lines",
-                                     line={"color": "#168f2c", "width": 1},
-                                     fillcolor="rgba(22,143,44,0.16)",
-                                     hovertemplate=f"UDL: {q:g}kN/m<extra></extra>"))
-            fig.add_annotation(x=(xg1+xg2)/2, y=yb*1.12, text=f"{q:g}kN/m", showarrow=False,
-                               font={"size": 10, "color": "#168f2c"})
+            fig.add_trace(go.Scatter(x=[xg1, xg2, xg2, xg1, xg1], y=[0, 0, yb, yb, 0], fill="toself", mode="lines", line={"color": "#168f2c", "width": 1}, fillcolor="rgba(22,143,44,0.16)", hovertemplate=f"UDL: {q:g}kN/m<extra></extra>"))
+            fig.add_annotation(x=(xg1+xg2)/2, y=yb*1.12, text=f"{q:g}kN/m", showarrow=False, font={"size": 10, "color": "#168f2c"})
         x_acc += Ls
-
     return fig
 
 
@@ -743,109 +635,44 @@ def render_plane_frame() -> None:
         st.header("⚙️ Plane Frame — Input")
         if st.button("🆕 New Model", type="primary", use_container_width=True, key="pf_new"):
             for k in list(st.session_state.keys()):
-                if k.startswith("pf_"):
-                    st.session_state.pop(k, None)
+                if k.startswith("pf_"): st.session_state.pop(k, None)
             st.rerun()
         st.divider()
-        st.info(
-            "**Hướng dẫn:**\n"
-            "1. Nhập tọa độ nút (Node)\n"
-            "2. Nhập phần tử (Element)\n"
-            "3. Nhập gối đỡ (Support)\n"
-            "4. Nhập tải trọng\n"
-            "5. Nhấn Solve"
-        )
-        st.divider()
-        st.markdown("**Đơn vị:** kN, m, kNm")
+        st.info("**Hướng dẫn:**\n1. Nhập tọa độ nút\n2. Nhập phần tử\n3. Nhập gối đỡ\n4. Nhập tải trọng\n5. Nhấn Solve")
 
-    # ── Input tables ──────────────────────────────────
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
-
-    tab_nd, tab_el, tab_sup, tab_pl_nd, tab_udl_el = st.tabs([
-        "🔵 Nodes", "📐 Elements", "🔒 Supports", "⬇️ Node Loads", "📏 Element UDL"])
+    tab_nd, tab_el, tab_sup, tab_pl_nd, _ = st.tabs(["🔵 Nodes", "📐 Elements", "🔒 Supports", "⬇️ Node Loads", "📏 Element UDL"])
 
     with tab_nd:
-        st.caption("Tọa độ nút (x, y) — đơn vị m")
-        nodes_default = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0],
-                                       "y (m)": [0.0, 4.0, 4.0, 0.0]})
+        nodes_default = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0], "y (m)": [0.0, 4.0, 4.0, 0.0]})
         df_nodes = safe_data_editor("pf_nd_ed", nodes_default, **cfg)
-
     with tab_el:
-        st.caption("Phần tử: nút đầu, nút cuối, E (kN/m²), A (m²), I (m⁴), UDL_local (kN/m)")
-        elems_default = pd.DataFrame({
-            "i": [0, 1, 3], "j": [1, 2, 2],
-            "E": [200e6]*3, "A": [0.01]*3, "I": [1e-4]*3, "udl_local": [0.0]*3
-        })
+        elems_default = pd.DataFrame({"i": [0, 1, 3], "j": [1, 2, 2], "E": [200e6]*3, "A": [0.01]*3, "I": [1e-4]*3, "udl_local": [0.0]*3})
         df_el = safe_data_editor("pf_el_ed", elems_default, **cfg)
-
     with tab_sup:
-        st.caption("Gối: nút, ux_fixed, uy_fixed, rz_fixed (True/False)")
-        sups_default = pd.DataFrame({"node": [0, 3],
-                                      "ux": [True, True],
-                                      "uy": [True, True],
-                                      "rz": [True, True]})
+        sups_default = pd.DataFrame({"node": [0, 3], "ux": [True, True], "uy": [True, True], "rz": [True, True]})
         df_sup = safe_data_editor("pf_sup_ed", sups_default, **cfg)
-
     with tab_pl_nd:
-        st.caption("Tải tập trung tại nút: Fx (kN), Fy (kN), Mz (kNm)")
-        nloads_default = pd.DataFrame({"node": pd.Series(dtype=int),
-                                        "Fx (kN)": pd.Series(dtype=float),
-                                        "Fy (kN)": pd.Series(dtype=float),
-                                        "Mz (kNm)": pd.Series(dtype=float)})
+        nloads_default = pd.DataFrame({"node": pd.Series(dtype=int), "Fx (kN)": pd.Series(dtype=float), "Fy (kN)": pd.Series(dtype=float), "Mz (kNm)": pd.Series(dtype=float)})
         df_nload = safe_data_editor("pf_nl_ed", nloads_default, **cfg)
-
-    with tab_udl_el:
-        st.caption("UDL phân bố trên phần tử (nhập vào cột 'udl_local' trong bảng Elements)")
-        st.info("UDL được nhập trực tiếp ở bảng **Elements** (cột `udl_local`), "
-                "tính theo phương vuông góc trục cục bộ của phần tử, đơn vị kN/m.")
 
     result_pf: PlaneFrameResult | None = st.session_state.get("pf_result")
 
     if st.button("▶ Solve", type="primary", use_container_width=True, key="pf_solve"):
         try:
-            nodes = [FrameNode(x=float(r["x (m)"]), y=float(r["y (m)"]))
-                     for _, r in df_nodes.iterrows()
-                     if pd.notna(r.get("x (m)")) and pd.notna(r.get("y (m)"))]
-            elems = []
-            for _, r in df_el.iterrows():
-                if pd.isna(r.get("i")) or pd.isna(r.get("j")): continue
-                elems.append(FrameElement(
-                    i_node=int(r["i"]), j_node=int(r["j"]),
-                    E=float(r["E"]), A=float(r["A"]), I=float(r["I"]),
-                    udl_local=float(r.get("udl_local", 0) or 0),
-                ))
-            sups = []
-            for _, r in df_sup.iterrows():
-                if pd.isna(r.get("node")): continue
-                sups.append(FrameSupport(
-                    node=int(r["node"]),
-                    ux_fixed=bool(r.get("ux", True)),
-                    uy_fixed=bool(r.get("uy", True)),
-                    rz_fixed=bool(r.get("rz", True)),
-                ))
-            pls = []
-            for _, r in df_nload.iterrows():
-                if pd.isna(r.get("node")): continue
-                pls.append(FramePointLoad(
-                    node=int(r["node"]),
-                    Fx=float(r.get("Fx (kN)", 0) or 0),
-                    Fy=float(r.get("Fy (kN)", 0) or 0),
-                    Mz=float(r.get("Mz (kNm)", 0) or 0),
-                ))
+            nodes = [FrameNode(x=float(r["x (m)"]), y=float(r["y (m)"])) for _, r in df_nodes.iterrows() if pd.notna(r.get("x (m)")) and pd.notna(r.get("y (m)"))]
+            elems = [FrameElement(i_node=int(r["i"]), j_node=int(r["j"]), E=float(r["E"]), A=float(r["A"]), I=float(r["I"]), udl_local=float(r.get("udl_local", 0) or 0)) for _, r in df_el.iterrows() if pd.notna(r.get("i"))]
+            sups = [FrameSupport(node=int(r["node"]), ux_fixed=bool(r.get("ux", True)), uy_fixed=bool(r.get("uy", True)), rz_fixed=bool(r.get("rz", True))) for _, r in df_sup.iterrows() if pd.notna(r.get("node"))]
+            pls = [FramePointLoad(node=int(r["node"]), Fx=float(r.get("Fx (kN)", 0) or 0), Fy=float(r.get("Fy (kN)", 0) or 0), Mz=float(r.get("Mz (kNm)", 0) or 0)) for _, r in df_nload.iterrows() if pd.notna(r.get("node"))]
+
             pf_input = PlaneFrameInput(nodes=nodes, elements=elems, supports=sups, point_loads=pls)
-            result_pf = solve_plane_frame(pf_input)
-            st.session_state.pf_result = result_pf
-            st.session_state.pf_input  = pf_input
+            st.session_state.pf_result = solve_plane_frame(pf_input)
+            st.rerun()
         except Exception as e:
             st.error(f"Lỗi: {e}")
-            result_pf = None
 
-    # ── Metrics ──
     if result_pf is None:
-        metric_html([("Nodes", str(len(df_nodes))),
-                     ("Elements", str(len(df_el))),
-                     ("Supports", str(len(df_sup))),
-                     ("Status", "Ready")])
+        metric_html([("Nodes", str(len(df_nodes))), ("Elements", str(len(df_el))), ("Supports", str(len(df_sup))), ("Status", "Ready")])
     else:
         all_V = np.concatenate([er.shear  for er in result_pf.element_results])
         all_M = np.concatenate([er.moment for er in result_pf.element_results])
@@ -857,180 +684,90 @@ def render_plane_frame() -> None:
             ("Reactions", f"{len(result_pf.reactions)} gối"),
         ])
 
-    # ── Plots ──
     left, right = st.columns([1.7, 1], gap="large")
     with left:
         a, b = st.columns(2)
-        with a:
-            st.plotly_chart(_pf_geometry_plot(df_nodes, df_el, df_sup, result_pf),
-                            use_container_width=True)
-        with b:
-            st.plotly_chart(_pf_diagram_plot(result_pf, "moment", "BMD"),
-                            use_container_width=True)
+        with a: st.plotly_chart(_pf_geometry_plot(df_nodes, df_el, df_sup, result_pf), use_container_width=True)
+        with b: st.plotly_chart(_pf_diagram_plot(result_pf, "moment", "BMD"), use_container_width=True)
         c, d = st.columns(2)
-        with c:
-            st.plotly_chart(_pf_diagram_plot(result_pf, "shear", "SFD"),
-                            use_container_width=True)
-        with d:
-            st.plotly_chart(_pf_diagram_plot(result_pf, "axial", "AFD"),
-                            use_container_width=True)
+        with c: st.plotly_chart(_pf_diagram_plot(result_pf, "shear", "SFD"), use_container_width=True)
+        with d: st.plotly_chart(_pf_diagram_plot(result_pf, "axial", "AFD"), use_container_width=True)
     with right:
         report_panel(result_pf.report if result_pf else None, "Thuyết Minh — Khung Phẳng", "plane_frame")
 
 
 def _pf_geometry_plot(df_nodes, df_el, df_sup, result_pf: PlaneFrameResult | None) -> go.Figure:
-    """Geometry + deformed shape overlay."""
     try:
-        nodes_xy = [(float(r["x (m)"]), float(r["y (m)"])) for _, r in df_nodes.iterrows()
-                    if pd.notna(r.get("x (m)")) and pd.notna(r.get("y (m)"))]
-    except Exception:
-        nodes_xy = []
+        nodes_xy = [(float(r["x (m)"]), float(r["y (m)"])) for _, r in df_nodes.iterrows() if pd.notna(r.get("x (m)"))]
+    except Exception: nodes_xy = []
 
-    all_x = [p[0] for p in nodes_xy] or [0]
-    all_y = [p[1] for p in nodes_xy] or [0]
-    x_range = max(max(all_x) - min(all_x), 1.0)
-    y_range = max(max(all_y) - min(all_y), 1.0)
+    fig = base_figure("Geometry & Deformed Shape", max([p[0] for p in nodes_xy] or [1.0]))
 
-    fig = go.Figure()
-    fig.update_layout(
-        title=dict(text="<b>Geometry & Deformed Shape</b>", x=0.5, font=dict(size=14, color=AXIS)),
-        height=PLOT_HEIGHT,
-        margin=dict(l=40, r=20, t=55, b=40),
-        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
-        showlegend=True,
-        xaxis=dict(title="x (m)", gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS,
-                   mirror=True, scaleanchor="y"),
-        yaxis=dict(title="y (m)", gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS, mirror=True),
-    )
-
-    # Original elements
     for _, r in df_el.iterrows():
         try:
             i, j = int(r["i"]), int(r["j"])
             ni, nj = nodes_xy[i], nodes_xy[j]
-            fig.add_trace(go.Scatter(x=[ni[0], nj[0]], y=[ni[1], nj[1]],
-                                     mode="lines+markers",
-                                     line={"color": COLOR_BEAM, "width": 5},
-                                     marker={"size": 8, "color": "#263238"},
-                                     showlegend=False, hoverinfo="skip"))
-        except Exception:
-            pass
+            fig.add_trace(go.Scatter(x=[ni[0], nj[0]], y=[ni[1], nj[1]], mode="lines+markers", line={"color": COLOR_BEAM, "width": 5}, marker={"size": 8, "color": "#263238"}, showlegend=False, hoverinfo="skip"))
+        except Exception: pass
 
-    # Node labels
     for i, (xn, yn) in enumerate(nodes_xy):
-        fig.add_annotation(x=xn, y=yn, text=f" N{i}", showarrow=False,
-                           font={"size": 11, "color": "#0b5fff"},
-                           xshift=8)
+        fig.add_annotation(x=xn, y=yn, text=f" N{i}", showarrow=False, font={"size": 11, "color": "#0b5fff"}, xshift=8)
 
-    # Supports
     for _, r in df_sup.iterrows():
         try:
-            ni_idx = int(r["node"])
-            xp, yp = nodes_xy[ni_idx]
-            ux, uy = bool(r.get("ux", True)), bool(r.get("uy", True))
-            color_s = "#ef1d14"
-            fig.add_trace(go.Scatter(x=[xp], y=[yp], mode="markers",
-                                     marker=dict(symbol="triangle-down", size=14, color=color_s),
-                                     showlegend=False,
-                                     hovertemplate=f"Gối N{ni_idx}<extra></extra>"))
-        except Exception:
-            pass
-
-    # Deformed shape (scaled)
-    if result_pf is not None:
-        disp = result_pf.node_displacements
-        max_disp = float(np.max(np.abs(disp[:, :2]))) + 1e-30
-        scale = 0.1 * min(x_range, y_range) / max_disp
-
-        for er in result_pf.element_results:
-            xd = er.x_coords + disp[..., 0][..., np.newaxis].flatten()[0]  # simple midpoint
-            # use element coords directly
-            xi_plot = er.x_coords
-            yi_plot = er.y_coords
-            # rough scaled displacement
-            n_pts = len(xi_plot)
-            fig.add_trace(go.Scatter(
-                x=xi_plot, y=yi_plot, mode="lines",
-                line={"color": COLOR_ELAST, "width": 2, "dash": "dash"},
-                name="Deformed" if er.elem_idx == 0 else None,
-                showlegend=(er.elem_idx == 0),
-                hoverinfo="skip",
-            ))
+            xp, yp = nodes_xy[int(r["node"])]
+            fig.add_trace(go.Scatter(x=[xp], y=[yp], mode="markers", marker=dict(symbol="triangle-down", size=14, color="#ef1d14"), showlegend=False))
+        except Exception: pass
 
     return fig
 
 
 def _pf_diagram_plot(result_pf: PlaneFrameResult | None, field: str, title: str) -> go.Figure:
-    """Plot axial / shear / moment diagram for all frame elements along their global coords."""
     color_map = {"shear": COLOR_SFD, "moment": COLOR_BMD, "axial": COLOR_AXIAL}
     unit_map  = {"shear": "kN", "moment": "kNm", "axial": "kN"}
     color = color_map.get(field, "#333")
     unit  = unit_map.get(field, "")
 
     fig = go.Figure()
+    theme = get_plot_theme()
     fig.update_layout(
-        title=dict(text=f"<b>{title}</b>", x=0.5, font=dict(size=14, color=AXIS)),
-        height=PLOT_HEIGHT,
-        margin=dict(l=40, r=20, t=55, b=40),
-        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
-        showlegend=False,
-        xaxis=dict(title="x (m)", gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS,
-                   mirror=True, scaleanchor="y"),
-        yaxis=dict(title=f"{unit}", gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS, mirror=True),
+        title=dict(text=f"<b>{title}</b>", x=0.5, font=dict(size=14, color=theme["axis"])),
+        height=PLOT_HEIGHT, margin=dict(l=40, r=20, t=55, b=40),
+        paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], showlegend=False,
+        xaxis=dict(title="x (m)", gridcolor=theme["grid"], linecolor=theme["axis"], tickfont=dict(color=theme["axis"]), titlefont=dict(color=theme["axis"])),
+        yaxis=dict(title=f"{unit}", gridcolor=theme["grid"], linecolor=theme["axis"], tickfont=dict(color=theme["axis"]), titlefont=dict(color=theme["axis"])),
     )
 
     if result_pf is None:
-        fig.add_annotation(text="Chưa có kết quả", x=0.5, y=0.5, xref="paper", yref="paper",
-                           showarrow=False, font={"size": 14, "color": "#aaa"})
+        fig.add_annotation(text="Chưa có kết quả", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False, font={"size": 14, "color": "#aaa"})
         return fig
 
-    # For frame diagrams: plot value perpendicular to element axis
     for er in result_pf.element_results:
         arr = getattr(er, field)
-        # Draw along global x of element (simplified: project onto x-axis)
         fig.add_trace(go.Scatter(
-            x=er.x_coords, y=arr,
-            mode="lines",
-            line={"color": color, "width": 2},
-            fill="tozeroy",
+            x=er.x_coords, y=arr, mode="lines", line={"color": color, "width": 2}, fill="tozeroy",
             fillcolor=f"rgba({_hex_to_rgb(color)},0.18)",
-            hovertemplate=f"Phần tử {er.elem_idx}<br>x=%{{x:.2f}}m  {field}=%{{y:.3f}}{unit}<extra></extra>",
-            name=f"Elem {er.elem_idx}",
+            hovertemplate=f"Phần tử {er.elem_idx}<br>x=%{{x:.2f}}m  {field}=%{{y:.3f}}{unit}<extra></extra>"
         ))
-
     return fig
 
 
 def _hex_to_rgb(hex_color: str) -> str:
     h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"{r},{g},{b}"
+    return f"{int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)}"
 
 
 # ══════════════════════════════════════════════════════
-#  MAIN
+#  MAIN RUNNER
 # ══════════════════════════════════════════════════════
-
 def main() -> None:
     inject_css()
     st.title("🏗️ Beam Analysis Suite")
 
-    # Top-level tab selector
-    TAB_SINGLE = "📏 Single Beam"
-    TAB_CB     = "🔗 Continuous Beam"
-    TAB_PF     = "🏛️ Plane Frame"
-
-    tab1, tab2, tab3 = st.tabs([TAB_SINGLE, TAB_CB, TAB_PF])
-
-    with tab1:
-        render_single_beam()
-
-    with tab2:
-        render_continuous_beam()
-
-    with tab3:
-        render_plane_frame()
-
+    tab1, tab2, tab3 = st.tabs(["📏 Single Beam", "🔗 Continuous Beam", "🏛️ Plane Frame"])
+    with tab1: render_single_beam()
+    with tab2: render_continuous_beam()
+    with tab3: render_plane_frame()
 
 if __name__ == "__main__":
     main()
