@@ -210,42 +210,42 @@ st.set_page_config(
 def inject_css() -> None:
     st.markdown("""
     <style>
-    /* Ẩn những thứ không cần */
+    /* Ẩn các thành phần không cần thiết */
     #MainMenu, footer, [data-testid="stToolbar"] {
         display: none !important;
     }
 
-    /* NÚT TOGGLE CỦA RIÊNG CHÚNG TA */
+    /* NÚT TOGGLE SIDEBAR - LUÔN HIỂN THỊ */
     #custom-toggle {
         position: fixed;
         top: 12px;
         left: 12px;
         z-index: 999999;
-        background: transparent;
-        border: none;
+        background: white;
+        border: 2px solid #e0e0e0;
         font-size: 28px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         cursor: pointer;
-        color: var(--text-color);
-        padding: 8px 12px;
-        border-radius: 6px;
-        background-color: rgba(255,255,255,0.8);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        color: #333;
+        line-height: 1;
         transition: 0.2s;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     #custom-toggle:hover {
-        background-color: rgba(255,255,255,1);
+        background: #f0f0f0;
         transform: scale(1.05);
     }
 
-    /* Đảm bảo sidebar có thể mở/đóng bằng class "closed" */
+    /* Đảm bảo sidebar có thể toggle bằng class "closed" */
     section[data-testid="stSidebar"] {
-        transition: width 0.2s ease !important;
+        transition: width 0.2s ease;
     }
 
-    /* Các phần khác giữ nguyên */
+    /* Các phần còn lại giữ nguyên */
     .block-container {
         padding-top: 1.1rem;
         padding-bottom: 1.5rem;
@@ -289,46 +289,22 @@ def inject_css() -> None:
     }
     </style>
 
+    <!-- NÚT HTML TRỰC TIẾP -->
+    <div id="custom-toggle" title="Mở/đóng thanh bên">☰</div>
+
+    <!-- JAVASCRIPT: Toggle sidebar -->
     <script>
-    (function() {
-        // Tạo nút toggle sidebar
-        function createToggle() {
-            if (document.getElementById('custom-toggle')) return;
-
-            const btn = document.createElement('button');
-            btn.id = 'custom-toggle';
-            btn.innerHTML = '☰';
-            btn.setAttribute('aria-label', 'Toggle sidebar');
-            document.body.appendChild(btn);
-
-            // Sự kiện click: toggle class "closed" trên sidebar
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    document.addEventListener('DOMContentLoaded', function() {
+        var toggleBtn = document.getElementById('custom-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                var sidebar = document.querySelector('section[data-testid="stSidebar"]');
                 if (sidebar) {
                     sidebar.classList.toggle('closed');
                 }
             });
         }
-
-        // Chạy ngay khi DOM sẵn sàng và sau mỗi lần Streamlit rerender
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', createToggle);
-        } else {
-            createToggle();
-        }
-
-        // Dùng MutationObserver để theo dõi nếu sidebar bị thay đổi
-        const observer = new MutationObserver(function() {
-            if (!document.getElementById('custom-toggle')) {
-                createToggle();
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-
-        // Fallback sau 1 giây
-        setTimeout(createToggle, 1000);
-    })();
+    });
     </script>
     """, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════
