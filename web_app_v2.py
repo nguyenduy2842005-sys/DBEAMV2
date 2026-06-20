@@ -13,6 +13,7 @@ import zipfile
 from xml.sax.saxutils import escape as _xml_escape
 from typing import Iterable
 
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -365,20 +366,28 @@ def docx_with_images(
 
             img = io.BytesIO()
 
-            fig.write_image(
-                img,
-                format="png",
-                width=900,
-                height=500,
-                scale=2
-            )
+            try:
 
-            img.seek(0)
+                fig.write_image(
+                    img,
+                    format="png",
+                    width=900,
+                    height=500,
+                    scale=2
+                )
 
-            doc.add_picture(
-                img,
-                width=Inches(6.5)
-            )
+                img.seek(0)
+
+                doc.add_picture(
+                    img,
+                    width=Inches(6.5)
+                )
+
+            except Exception:
+
+                doc.add_paragraph(
+                    f"[Không thể chèn hình: {name}]"
+                )
 
     out = io.BytesIO()
     doc.save(out)
@@ -412,7 +421,9 @@ def report_panel(
             key=f"{key_prefix}_dl_txt",
         )
     with c2:
+
         try:
+
             if figures:
                 docx_bytes = docx_with_images(
                     report_text,
@@ -425,34 +436,34 @@ def report_panel(
                     report_title
                 )
 
-            st.download_button(
-                "⬇️ Xuất .docx",
-                data=docx_bytes,
-                file_name=f"{key_prefix}_report.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-                key=f"{key_prefix}_dl_docx",
-            )
-
-        except Exception as e:
-            st.error(f"Lỗi xuất DOCX: {e}")
         except ImportError:
+
+            # fallback không cần python-docx
             docx_bytes = _minimal_docx_bytes(
                 report_text,
                 report_title
             )
 
-            st.download_button(
-                "⬇️ Xuất .docx",
-                data=docx_bytes,
-                file_name=f"{key_prefix}_report.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-                key=f"{key_prefix}_dl_docx",
+        except Exception as e:
+
+            st.warning(
+                f"DOCX nâng cao lỗi ({e}). "
+                "Đang dùng DOCX tối giản."
             )
 
-        except Exception as e:
-            st.error(f"Lỗi xuất DOCX: {e}")
+            docx_bytes = _minimal_docx_bytes(
+                report_text,
+                report_title
+            )
+
+        st.download_button(
+            "⬇️ Xuất .docx",
+            data=docx_bytes,
+            file_name=f"{key_prefix}_report.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+            key=f"{key_prefix}_dl_docx",
+        )
 
 
 # ══════════════════════════════════════════════════════
