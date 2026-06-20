@@ -201,7 +201,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
     span_node_map = [0]
     acc = 0
     for s_idx, span in enumerate(spans):
-        n_elem = max(2, round(span.length / (0.01 * total_L)))
+        n_elem = max(10, round(span.length / (0.002 * total_L)))
         acc += n_elem
         span_node_map.append(acc)
     # span_node_map[k] = mesh global-node index at left end of span k (0) and at each support
@@ -221,7 +221,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
 
     # ── Consistent nodal loads from spans ──
     for s_idx, span in enumerate(spans):
-        n_elem = max(2, round(span.length / (0.01 * total_L)))
+        n_elem = max(10, round(span.length / (0.002 * total_L)))
         Le = span.length / n_elem
         gnode_start = span_node_map[s_idx]
 
@@ -335,13 +335,48 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
             x = x0g + xi * Le
             x_local = xi * Le  # vị trí cục bộ trong phần tử
 
-            # (Giữ nguyên các dòng tính N, dN, d2N, d3N cũ)
-            # ...
+            # Hermite shape functions
+            N = np.array([
+                1 - 3 * xi ** 2 + 2 * xi ** 3,
+                Le * xi * (1 - xi) ** 2,
+                3 * xi ** 2 - 2 * xi ** 3,
+                Le * xi ** 2 * (xi - 1)
+            ])
 
-            # 1. Tính giá trị từ hàm nội suy (phần do lực nút)
+            # first derivative
+            dN = np.array([
+                (-6 * xi + 6 * xi ** 2) / Le,
+                1 - 4 * xi + 3 * xi ** 2,
+                (6 * xi - 6 * xi ** 2) / Le,
+                -2 * xi + 3 * xi ** 2
+            ])
+
+            # second derivative
+            d2N = np.array([
+                (-6 + 12 * xi) / Le ** 2,
+                (-4 + 6 * xi) / Le,
+                (6 - 12 * xi) / Le ** 2,
+                (-2 + 6 * xi) / Le
+            ])
+
+            # third derivative
+            d3N = np.array([
+                12 / Le ** 3,
+                6 / Le ** 2,
+                -12 / Le ** 3,
+                6 / Le ** 2
+            ])
+
+            # displacement
             w_val = float(N @ u_e)
+
+            # rotation
             th_val = float(dN @ u_e)
+
+            # moment M = EI*w''
             M_fem = float(EI * (d2N @ u_e))
+
+            # shear V = EI*w'''
             V_fem = float(EI * (d3N @ u_e))
 
             # 2. Hiệu chỉnh do tải trọng UDL (q) cục bộ trên phần tử
