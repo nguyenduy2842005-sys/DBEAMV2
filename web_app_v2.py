@@ -19,7 +19,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-
+import matplotlib.pyplot as plt
+from docx import Document
+from docx.shared import Inches
+import tempfile
+import os
 from beam_core import BeamInput, BeamResult, solve_beam
 from fem_core import (
     SpanDef, SupportDef, ContinuousBeamInput, ContinuousBeamResult,
@@ -29,7 +33,19 @@ from fem_core import (
     solve_plane_frame,
     build_docx_bytes,
 )
-
+def create_placeholder_image(text: str) -> bytes:
+    """Tạo ảnh PNG với thông báo lỗi dùng Matplotlib."""
+    import matplotlib.pyplot as plt
+    import io
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.text(0.5, 0.5, f"⚠️ Không thể hiển thị biểu đồ:\n{text}",
+            ha='center', va='center', fontsize=14, transform=ax.transAxes)
+    ax.set_axis_off()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
+    plt.close()
+    buf.seek(0)
+    return buf.getvalue()
 # ══════════════════════════════════════════════════════
 #  GLOBAL CONSTANTS & SAFE ADAPTIVE THEME
 # ══════════════════════════════════════════════════════
@@ -340,77 +356,128 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
         z.writestr("word/_rels/document.xml.rels", doc_rels)
     return buf.getvalue()
 
+def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
+    """
+    Chuyển Plotly Figure sang PNG bằng Matplotlib.
+    Trả về bytes nếu thành công, ngược lại trả về None.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import io
+        import numpy as np
 
+        plt.figure(figsize=(8, 4.5))
+
+        # Vẽ từng trace
+        for tr in fig.data:
+            # Chỉ xử lý các trace có x,y
+            if hasattr(tr, 'x') and hasattr(tr, 'y') and tr.x is not None and tr.y is not None:
+                try:
+                    x = np.array(tr.x, dtype=float)
+                    y = np.array(tr.y, dtype=float)
+                    # Vẽ đường
+                    plt.plot(x, y, label=getattr(tr, 'name', None))
+                    # Nếu có fill "toself", vẽ vùng
+                    if hasattr(tr, 'fill') and tr.fill == 'toself':
+                        plt.fill_between(x, y, 0, alpha=0.2)
+                except Exception:
+                    pass
+
+        # Tiêu đề
+        title = ""
+        if fig.layout.title:
+            if hasattr(fig.layout.title, 'text'):
+                title = fig.layout.title.text
+            else:
+                title = str(fig.layout.title)
+        plt.title(title)
+
+        # Nhãn trục
+        if fig.layout.xaxis and hasattr(fig.layout.xaxis, 'title'):
+            if hasattr(fig.layout.xaxis.title, 'text'):
+                plt.xlabel(fig.layout.xaxis.title.text)
+        if fig.layout.yaxis and hasattr(fig.layout.yaxis, 'title'):
+            if hasattr(fig.layout.yaxis.title, 'text'):
+                plt.ylabel(fig.layout.yaxis.title.text)
+
+        plt.grid(True)
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
+        plt.close()
+        buf.seek(0)
+        return buf.getvalue()
+
+    except Exception:
+        return None
 def docx_with_images(
     report_text: str,
     report_title: str,
     figures: list[tuple[str, go.Figure]]
 ) -> bytes:
-
+    """
+    Tạo file DOCX với văn bản và các biểu đồ (dùng fallback Matplotlib nếu cần).
+    Luôn trả về bytes, không ném ngoại lệ.
+    """
     from docx import Document
     from docx.shared import Inches
     import tempfile
     import os
 
     doc = Document()
-
     doc.add_heading(report_title, level=1)
 
-    for line in report_text.split("\n"):
+    # Văn bản báo cáo
+    for line in report_text.split('\n'):
         doc.add_paragraph(line)
 
     if figures:
-
         doc.add_page_break()
-        doc.add_heading("Biểu đồ kết quả", level=1)
+        doc.add_heading('Biểu đồ kết quả', level=1)
 
         for name, fig in figures:
-
             doc.add_heading(name, level=2)
 
+            # Tạo file tạm để lưu ảnh
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                img_path = tmp.name
+
             try:
+                # Thử dùng Plotly to_image (cần Chrome/Kaleido)
+                try:
+                    img_bytes = fig.to_image(format='png', width=1600, height=900, scale=2)
+                except Exception:
+                    # Fallback dùng Matplotlib
+                    img_bytes = plotly_to_png_fallback(fig)
 
-                with tempfile.NamedTemporaryFile(
-                    suffix=".png",
-                    delete=False
-                ) as tmp:
+                # Nếu vẫn không có ảnh -> tạo placeholder
+                if img_bytes is None:
+                    img_bytes = create_placeholder_image(name)
 
-                    png_path = tmp.name
-
-                img_bytes = fig.to_image(
-                    format="png",
-                    width=1600,
-                    height=900,
-                    scale=2
-                )
-
-                with open(png_path, "wb") as f:
+                # Ghi ảnh vào file tạm
+                with open(img_path, 'wb') as f:
                     f.write(img_bytes)
-                    doc.add_picture(
-                        png_path,
-                        width=Inches(6.5)
-                    )
-                os.remove(png_path)
+                # Chèn vào Word
+                doc.add_picture(img_path, width=Inches(6.5))
 
+            except Exception:
+                # Nếu mọi thứ đều lỗi, vẫn chèn placeholder
+                try:
+                    img_bytes = create_placeholder_image(name)
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6.5))
+                except Exception:
+                    # Bất khả kháng: thêm văn bản báo lỗi
+                    doc.add_paragraph(f'[Không thể chèn ảnh cho biểu đồ: {name}]')
 
-            except Exception as e:
+            finally:
+                # Dọn dẹp file tạm
+                if os.path.exists(img_path):
+                    os.unlink(img_path)
 
-                import traceback
-
-                doc.add_paragraph(
-
-                    f"[Lỗi xuất hình {name}]"
-
-                )
-
-                doc.add_paragraph(
-
-                    traceback.format_exc()
-
-                )
+    # Xuất bytes
     out = io.BytesIO()
     doc.save(out)
-
     return out.getvalue()
 def report_panel(
     report_text: str | None,
