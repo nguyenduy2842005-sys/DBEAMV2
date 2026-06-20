@@ -588,33 +588,53 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
         fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10})
         x_acc += Ls
 
-        # VẼ GỐI ĐỠ PIN & ROLLER KHÔNG LỖI
+        # VẼ GỐI ĐỠ PIN & ROLLER CHUẨN ĐẸP KHÔNG BỊ MÉO
         node_xs = [0.0] + list(np.cumsum(span_lengths))
         for i, kind in enumerate(support_kinds):
             xp = node_xs[i]
             if kind == "pin":
-                # Gối cố định: Giữ nguyên hình tam giác màu đỏ đổ đặc
+                # Gối cố định: Hình tam giác màu đỏ
                 fig.add_trace(go.Scatter(
                     x=[xp, xp + total_L / 34, xp - total_L / 34, xp], y=[0, -0.37, -0.37, 0],
                     fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5},
                     fillcolor=COLOR_SUP, hoverinfo="skip"
                 ))
             elif kind == "roller":
-                # Gối di động: 2 vòng tròn chồng lên nhau + thanh đứng + sàn phẳng ngang
-                r_sz = 0.08  # Bán kính vòng tròn tương thích tỷ lệ trục
+                # Gối di động: Khắc phục lỗi méo hình elip từ image_b2c27b.png
+                # Sử dụng các điểm rời rạc vẽ vòng tròn hoàn hảo dựa trên tỷ lệ x/y trực quan
+                t = np.linspace(0, 2 * np.pi, 30)
 
-                # Vòng tròn phía trên (tiếp xúc đáy thanh dầm chính)
-                fig.add_shape(type="circle", x0=xp - r_sz, y0=-2 * r_sz, x1=xp + r_sz, y1=0,
-                              line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
-                # Vòng tròn phía dưới
-                fig.add_shape(type="circle", x0=xp - r_sz, y0=-4 * r_sz, x1=xp + r_sz, y1=-2 * r_sz,
-                              line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
+                # Tính toán bán kính hiệu chỉnh cho trục X và Y để bù trừ tỷ lệ co giãn
+                r_x = total_L * 0.008  # Độ rộng thực tế theo trục X
+                r_y = 0.07  # Độ cao thực tế theo trục Y
+
+                # Vòng tròn 1 (Phía trên - tâm tại y = -r_y)
+                cx1, cy1 = xp, -r_y
+                fig.add_trace(go.Scatter(
+                    x=cx1 + r_x * np.cos(t), y=cy1 + r_y * np.sin(t),
+                    mode="lines", fill="toself", fillcolor="#ffffff",
+                    line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                ))
+
+                # Vòng tròn 2 (Phía dưới - tâm tại y = -3*r_y)
+                cx2, cy2 = xp, -3 * r_y
+                fig.add_trace(go.Scatter(
+                    x=cx2 + r_x * np.cos(t), y=cy2 + r_y * np.sin(t),
+                    mode="lines", fill="toself", fillcolor="#ffffff",
+                    line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                ))
+
                 # Thanh trục đứng nối tâm giữa 2 vòng tròn
-                fig.add_shape(type="line", x0=xp, y0=-r_sz, x1=xp, y1=-3 * r_sz,
-                              line={"color": COLOR_SUP, "width": 2})
-                # Đường mặt phẳng nền đặt gối di động
-                fig.add_shape(type="line", x0=xp - total_L / 34, y0=-4 * r_sz, x1=xp + total_L / 34, y1=-4 * r_sz,
-                              line={"color": COLOR_SUP, "width": 2})
+                fig.add_trace(go.Scatter(
+                    x=[xp, xp], y=[-r_y, -3 * r_y],
+                    mode="lines", line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                ))
+
+                # Mặt phẳng ngang chân gối
+                fig.add_trace(go.Scatter(
+                    x=[xp - total_L / 34, xp + total_L / 34], y=[-4 * r_y, -4 * r_y],
+                    mode="lines", line={"color": COLOR_SUP, "width": 2.5}, hoverinfo="skip"
+                ))
 
             elif kind == "fixed":
                 fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
