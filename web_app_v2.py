@@ -71,7 +71,53 @@ def base_figure(title, length, y_title=""):
     fig.update_xaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
     fig.update_yaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
     return fig
+def synced_figure(title, length, y_range=(-1.5, 1.2), y_title=""):
+    margin_x = max(length * 0.06, 0.5)
 
+    fig = go.Figure()
+
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{title}</b>",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=15)
+        ),
+        height=PLOT_HEIGHT,
+        margin=dict(l=55, r=25, t=60, b=65),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+
+        xaxis=dict(
+            title="x (m)",
+            range=[-margin_x, length + margin_x],
+            zeroline=True,
+            mirror=True,
+            scaleanchor=None
+        ),
+
+        yaxis=dict(
+            title=y_title,
+            range=list(y_range),
+            zeroline=True,
+            mirror=True
+        )
+    )
+
+    fig.update_xaxes(
+        showgrid=True,
+        linecolor="gray",
+        gridcolor="rgba(128,128,128,0.2)"
+    )
+
+    fig.update_yaxes(
+        showgrid=True,
+        linecolor="gray",
+        gridcolor="rgba(128,128,128,0.2)"
+    )
+
+    return fig
 # ══════════════════════════════════════════════════════
 #  PAGE CONFIG & ADAPTIVE CSS
 # ══════════════════════════════════════════════════════
@@ -609,22 +655,44 @@ def render_continuous_beam() -> None:
 
 
 def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.Figure:
-    """Hàm dựng khung dầm và gối đỡ nền đồng bộ tỷ lệ hiển thị, không bị cắt chân sàn"""
+    """Hàm dựng khung dầm và gối đỡ nền đồng bộ tỷ lệ hiển thị"""
+
     fig = go.Figure()
 
-    # 1. Cấu hình Layout mở rộng lề dưới thoải mái, đồng bộ chiều cao hiển thị
+    # khoảng trống hai đầu để không cắt gối
+    margin_x = max(total_L * 0.06, 0.5)
+
+    # 1. Layout
     fig.update_layout(
-        title=dict(x=0.5, xanchor="center", font=dict(size=14, color="#333333")),
+        title=dict(
+            x=0.5,
+            xanchor="center",
+            font=dict(size=14, color="#333333")
+        ),
+
         height=315,
-        margin=dict(l=55, r=20, t=60, b=75),
+
+        margin=dict(
+            l=55,
+            r=20,
+            t=60,
+            b=75
+        ),
+
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
-        xaxis=dict(title="x (m)", range=[0, total_L], showgrid=True, linecolor="gray",
-                   gridcolor="rgba(128,128,128,0.15)"),
+
+        xaxis=dict(
+            title="x (m)",
+            range=[-margin_x, total_L + margin_x],
+            showgrid=True,
+            linecolor="gray",
+            gridcolor="rgba(128,128,128,0.15)"
+        )
     )
 
-    # GỠ BỎ KHÓA TỶ LỆ CỨNG (scaleanchor): Ép cứng dải hiển thị cố định tuyệt đối cho cả 2 biểu đồ
+
     fig.update_yaxes(
         range=[-1.5, 1.2],
         fixedrange=True,
@@ -634,55 +702,183 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
         title=""
     )
 
-    # 2. Vẽ trục dầm màu xám chính
-    fig.add_trace(
-        go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
 
-    # Nhãn tên nhịp dầm (L1, L2,...)
+    # 2. Thanh dầm
+    fig.add_trace(
+        go.Scatter(
+            x=[0, total_L],
+            y=[0, 0],
+            mode="lines",
+            line={
+                "color": COLOR_BEAM,
+                "width": 8
+            },
+            hoverinfo="skip"
+        )
+    )
+
+
+    # Nhãn nhịp
     x_acc = 0.0
+
     for i, Ls in enumerate(span_lengths):
         mid = x_acc + Ls / 2
-        fig.add_annotation(x=mid, y=0.2, text=f"L{i + 1}={Ls:.1f}m", showarrow=False,
-                           font={"size": 10, "color": "#555"})
+
+        fig.add_annotation(
+            x=mid,
+            y=0.2,
+            text=f"L{i+1}={Ls:.1f}m",
+            showarrow=False,
+            font={
+                "size":10,
+                "color":"#555"
+            }
+        )
+
         x_acc += Ls
 
-    # 3. Vẽ hệ thống gối đỡ
+
+
+    # 3. Gối
     node_xs = [0.0] + list(np.cumsum(span_lengths))
+
+    support_size = max(total_L * 0.035, 0.25)
+
+
     for i, kind in enumerate(support_kinds):
+
         xp = node_xs[i]
+
+
+        # gối pin
         if kind == "pin":
-            fig.add_trace(go.Scatter(
-                x=[xp, xp + total_L / 34, xp - total_L / 34, xp], y=[0, -0.37, -0.37, 0],
-                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5},
-                fillcolor=COLOR_SUP, hoverinfo="skip"
-            ))
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[
+                        xp,
+                        xp + support_size,
+                        xp - support_size,
+                        xp
+                    ],
+
+                    y=[
+                        0,
+                        -0.37,
+                        -0.37,
+                        0
+                    ],
+
+                    fill="toself",
+                    mode="lines",
+                    line={
+                        "color":COLOR_SUP,
+                        "width":1.5
+                    },
+                    fillcolor=COLOR_SUP,
+                    hoverinfo="skip"
+                )
+            )
+
+
+        # gối con lăn
         elif kind == "roller":
-            # Gối di động tối giản: Dùng marker pixel cố định không đổi hình dáng
+
             y_top = -0.08
             y_bot = -0.36
             y_floor = -0.44
-            fig.add_trace(go.Scatter(
-                x=[xp], y=[y_top], mode="markers",
-                marker=dict(symbol="circle", size=7, color=COLOR_SUP), hoverinfo="skip"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[xp], y=[y_bot], mode="markers",
-                marker=dict(symbol="circle", size=7, color=COLOR_SUP), hoverinfo="skip"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[xp, xp], y=[y_top, y_bot], mode="lines",
-                line=dict(color=COLOR_SUP, width=1.5), hoverinfo="skip"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[xp - total_L / 34, xp + total_L / 34], y=[y_floor, y_floor], mode="lines",
-                line=dict(color=COLOR_SUP, width=2), hoverinfo="skip"
-            ))
-        elif kind == "fixed":
-            fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
-                          fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
-        # Đặt nhãn N0, N1, N2 nằm an toàn phía dưới chân gối
-        fig.add_annotation(x=xp, y=-0.68, text=f"N{i}", showarrow=False, font={"size": 10, "color": COLOR_SUP})
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[xp],
+                    y=[y_top],
+                    mode="markers",
+                    marker=dict(
+                        symbol="circle",
+                        size=7,
+                        color=COLOR_SUP
+                    ),
+                    hoverinfo="skip"
+                )
+            )
+
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[xp],
+                    y=[y_bot],
+                    mode="markers",
+                    marker=dict(
+                        symbol="circle",
+                        size=7,
+                        color=COLOR_SUP
+                    ),
+                    hoverinfo="skip"
+                )
+            )
+
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[xp,xp],
+                    y=[y_top,y_bot],
+                    mode="lines",
+                    line=dict(
+                        color=COLOR_SUP,
+                        width=1.5
+                    ),
+                    hoverinfo="skip"
+                )
+            )
+
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[
+                        xp-support_size,
+                        xp+support_size
+                    ],
+                    y=[
+                        y_floor,
+                        y_floor
+                    ],
+                    mode="lines",
+                    line=dict(
+                        color=COLOR_SUP,
+                        width=2
+                    ),
+                    hoverinfo="skip"
+                )
+            )
+
+
+
+        # ngàm
+        elif kind == "fixed":
+
+            fig.add_shape(
+                type="rect",
+                x0=xp-total_L/80,
+                x1=xp+total_L/80,
+                y0=-0.42,
+                y1=0.42,
+                fillcolor=COLOR_SUP,
+                line={"color":COLOR_SUP}
+            )
+
+
+        fig.add_annotation(
+            x=xp,
+            y=-0.68,
+            text=f"N{i}",
+            showarrow=False,
+            font={
+                "size":10,
+                "color":COLOR_SUP
+            }
+        )
+
 
     return fig
 
