@@ -26,7 +26,7 @@ from fem_core import (
     FrameNode, FrameElement, FrameSupport, FramePointLoad,
     PlaneFrameInput, PlaneFrameResult, FrameElementResult,
     solve_plane_frame,
-    build_docx_bytes,)
+    build_docx_bytes)
 
 
 # ══════════════════════════════════════════════════════

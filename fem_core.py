@@ -161,19 +161,22 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
     return f
 
 def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> ContinuousBeamResult:
-        """Assemble global stiffness, apply BCs, solve, recover diagrams."""
+    """Assemble global stiffness, apply BCs, solve, recover diagrams."""
 
-        spans = data.spans
-        n_spans = len(spans)
-        total_L = sum(s.length for s in spans)
+    spans = data.spans
+    n_spans = len(spans)
+    total_L = sum(s.length for s in spans)
 
-        # Node positions (span interfaces)
-        node_x = np.concatenate([[0.0], np.cumsum([s.length for s in spans])])
+    # Node positions
+    node_x = np.concatenate([[0.0], np.cumsum([s.length for s in spans])])
+
 
     # ── Mesh: subdivide each span into n_elem elements ──
-    mesh_elems = []   # list of (EI, L_local, span_idx, x_start_global)
-    elem_nodes = []   # (i_node_global, j_node_global)
+    mesh_elems = []
+    elem_nodes = []
     global_node_x = [0.0]
+
+    gnode = 0
 
     gnode = 0
     for s_idx, span in enumerate(spans):
