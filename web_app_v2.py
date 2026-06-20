@@ -243,20 +243,31 @@ def draw_supports_single(fig: go.Figure, data: BeamInput) -> None:
             line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP,
             hoverinfo="skip"))
 
-        # Node L (Gối di động - Roller kiểu mới)
-        r_sz = 0.08  # Bán kính vòng tròn (tùy chỉnh trực quan)
-        # Vòng tròn trên (tiếp xúc đáy dầm)
-        fig.add_shape(type="circle", x0=l - r_sz, y0=-2 * r_sz, x1=l + r_sz, y1=0,
-                      line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
-        # Vòng tròn dưới
-        fig.add_shape(type="circle", x0=l - r_sz, y0=-4 * r_sz, x1=l + r_sz, y1=-2 * r_sz,
-                      line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
-        # Thanh nối thẳng đứng ở giữa hai vòng tròn
-        fig.add_shape(type="line", x0=l, y0=-r_sz, x1=l, y1=-3 * r_sz,
-                      line={"color": COLOR_SUP, "width": 2})
-        # Đường mặt phẳng ngang chân gối
-        fig.add_shape(type="line", x0=l - l / 34, y0=-4 * r_sz, x1=l + l / 34, y1=-4 * r_sz,
-                      line={"color": COLOR_SUP, "width": 2})
+        # Node L (Gối di động dầm đơn - Tối giản chuẩn kỹ thuật)
+        # Điểm chấm 1 (Tiếp xúc đáy dầm y = 0)
+        fig.add_trace(go.Scatter(
+            x=[l], y=[0], mode="markers",
+            marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+            hoverinfo="skip"
+        ))
+        # Điểm chấm 2 (Nằm phía dưới tại y = -0.28)
+        fig.add_trace(go.Scatter(
+            x=[l], y=[-0.28], mode="markers",
+            marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+            hoverinfo="skip"
+        ))
+        # Thanh thẳng đứng nối xuyên tâm giữa 2 điểm
+        fig.add_trace(go.Scatter(
+            x=[l, l], y=[0, -0.28], mode="lines",
+            line=dict(color=COLOR_SUP, width=1.5),
+            hoverinfo="skip"
+        ))
+        # Mặt sàn phẳng ngang nằm dưới chân
+        fig.add_trace(go.Scatter(
+            x=[l - l / 34, l + l / 34], y=[-0.36, -0.36], mode="lines",
+            line=dict(color=COLOR_SUP, width=2),
+            hoverinfo="skip"
+        ))
     else:
         # Gối ngàm cố định (Cantilever - Giữ nguyên)
         fig.add_shape(type="rect", x0=l, x1=l + l / 42, y0=-0.42, y1=0.42,
@@ -600,42 +611,31 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
                     fillcolor=COLOR_SUP, hoverinfo="skip"
                 ))
             elif kind == "roller":
-                # Gối di động: Khắc phục lỗi méo hình elip từ image_b2c27b.png
-                # Sử dụng các điểm rời rạc vẽ vòng tròn hoàn hảo dựa trên tỷ lệ x/y trực quan
-                t = np.linspace(0, 2 * np.pi, 30)
-
-                # Tính toán bán kính hiệu chỉnh cho trục X và Y để bù trừ tỷ lệ co giãn
-                r_x = total_L * 0.008  # Độ rộng thực tế theo trục X
-                r_y = 0.07  # Độ cao thực tế theo trục Y
-
-                # Vòng tròn 1 (Phía trên - tâm tại y = -r_y)
-                cx1, cy1 = xp, -r_y
+                # Gối di động: Thể hiện tối giản bằng 2 dấu chấm độc lập và 1 đường thẳng đứng
+                # Điểm chấm 1 (Tiếp xúc đáy dầm y = 0)
                 fig.add_trace(go.Scatter(
-                    x=cx1 + r_x * np.cos(t), y=cy1 + r_y * np.sin(t),
-                    mode="lines", fill="toself", fillcolor="#ffffff",
-                    line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                    x=[xp], y=[0], mode="markers",
+                    marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+                    hoverinfo="skip"
                 ))
-
-                # Vòng tròn 2 (Phía dưới - tâm tại y = -3*r_y)
-                cx2, cy2 = xp, -3 * r_y
+                # Điểm chấm 2 (Nằm phía dưới tại y = -0.28)
                 fig.add_trace(go.Scatter(
-                    x=cx2 + r_x * np.cos(t), y=cy2 + r_y * np.sin(t),
-                    mode="lines", fill="toself", fillcolor="#ffffff",
-                    line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                    x=[xp], y=[-0.28], mode="markers",
+                    marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+                    hoverinfo="skip"
                 ))
-
-                # Thanh trục đứng nối tâm giữa 2 vòng tròn
+                # Thanh thẳng đứng nối xuyên tâm giữa 2 điểm
                 fig.add_trace(go.Scatter(
-                    x=[xp, xp], y=[-r_y, -3 * r_y],
-                    mode="lines", line={"color": COLOR_SUP, "width": 2}, hoverinfo="skip"
+                    x=[xp, xp], y=[0, -0.28], mode="lines",
+                    line=dict(color=COLOR_SUP, width=1.5),
+                    hoverinfo="skip"
                 ))
-
-                # Mặt phẳng ngang chân gối
+                # Mặt sàn phẳng ngang nằm dưới chân
                 fig.add_trace(go.Scatter(
-                    x=[xp - total_L / 34, xp + total_L / 34], y=[-4 * r_y, -4 * r_y],
-                    mode="lines", line={"color": COLOR_SUP, "width": 2.5}, hoverinfo="skip"
+                    x=[xp - total_L / 34, xp + total_L / 34], y=[-0.36, -0.36], mode="lines",
+                    line=dict(color=COLOR_SUP, width=2),
+                    hoverinfo="skip"
                 ))
-
             elif kind == "fixed":
                 fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
                               fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
