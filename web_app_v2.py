@@ -393,6 +393,78 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
                                  hovertemplate=f"UVL: {q:g} kN/m<extra></extra>"))
         fig.add_annotation(x=(x1+x2)/2, y=yb*1.12, text=f"{q:g} kN/m", showarrow=False,
                            font={"size": 11, "color": COLOR_SFD})
+    # ===============================
+    # POINT MOMENT
+    # ===============================
+    for M, xp in data.point_moments:
+
+        r = l * 0.025
+        y0 = 0.25
+
+        if M > 0:
+            theta = np.linspace(
+                np.pi * 0.25,
+                np.pi * 1.75,
+                40
+            )
+        else:
+            theta = np.linspace(
+                -np.pi * 0.75,
+                np.pi * 0.75,
+                40
+            )
+
+        x_arc = xp + r * np.cos(theta)
+        y_arc = y0 + r * np.sin(theta)
+
+        # vòng cung
+        fig.add_trace(
+            go.Scatter(
+                x=x_arc,
+                y=y_arc,
+                mode="lines",
+                line={
+                    "color": "#ff2b8a",
+                    "width": 2.5
+                },
+                hoverinfo="skip"
+            )
+        )
+
+        # mũi tên
+        xe = x_arc[-1]
+        ye = y_arc[-1]
+
+        tx = x_arc[-1] - x_arc[-3]
+        ty = y_arc[-1] - y_arc[-3]
+
+        fig.add_annotation(
+            x=xe,
+            y=ye,
+            ax=xe - tx * 0.35,
+            ay=ye - ty * 0.35,
+            xref="x",
+            yref="y",
+            axref="x",
+            ayref="y",
+            showarrow=True,
+            arrowhead=3,
+            arrowsize=1.4,
+            arrowwidth=2,
+            arrowcolor="#ff2b8a"
+        )
+
+        # giá trị moment
+        fig.add_annotation(
+            x=xp,
+            y=y0 + r * 1.8,
+            text=f"{M:g} kNm",
+            showarrow=False,
+            font={
+                "size": 11,
+                "color": "#ff2b8a"
+            }
+        )
     return fig
 
 
@@ -1110,26 +1182,31 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                     )
                 )
 
-                # mũi tên ở cuối vòng cung
+                # MŨI TÊN MOMENT (SỬA)
+                # ===============================
+
                 xe = x_arc[-1]
                 ye = y_arc[-1]
 
-                dx = x_arc[-1] - x_arc[-2]
-                dy = y_arc[-1] - y_arc[-2]
+                # vector tiếp tuyến cuối cung
+                tx = x_arc[-1] - x_arc[-3]
+                ty = y_arc[-1] - y_arc[-3]
+
+                scale = 0.35
 
                 fig.add_annotation(
                     x=xe,
                     y=ye,
-                    ax=xe - dx * 3,
-                    ay=ye - dy * 3,
+                    ax=xe - tx * scale,
+                    ay=ye - ty * scale,
                     xref="x",
                     yref="y",
                     axref="x",
                     ayref="y",
                     showarrow=True,
                     arrowhead=3,
-                    arrowsize=1.2,
-                    arrowwidth=2,
+                    arrowsize=1.4,
+                    arrowwidth=2.5,
                     arrowcolor="#ff2b8a"
                 )
 
