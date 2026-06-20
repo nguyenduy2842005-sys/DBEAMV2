@@ -431,34 +431,57 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
             )
         )
 
-        # mũi tên
+        # ===============================
+        # ĐẦU MŨI TÊN CONG (TAM GIÁC)
+        # ===============================
+
         xe = x_arc[-1]
         ye = y_arc[-1]
 
-        tx = x_arc[-1] - x_arc[-3]
-        ty = y_arc[-1] - y_arc[-3]
+        # vector tiếp tuyến cuối cung
+        tx = x_arc[-1] - x_arc[-4]
+        ty = y_arc[-1] - y_arc[-4]
 
-        length = math.sqrt(tx ** 2 + ty ** 2)
+        norm = math.sqrt(tx ** 2 + ty ** 2)
 
-        tx /= length
-        ty /= length
+        tx /= norm
+        ty /= norm
 
-        arrow_len = l * 0.06
+        # vector pháp tuyến để tạo tam giác
+        nx = -ty
+        ny = tx
 
-        fig.add_annotation(
-            x=xe,
-            y=ye,
-            ax=xe - tx * arrow_len,
-            ay=ye - ty * arrow_len,
-            xref="x",
-            yref="y",
-            axref="x",
-            ayref="y",
-            showarrow=True,
-            arrowhead=3,
-            arrowsize=1.1,
-            arrowwidth=2,
-            arrowcolor="#ff2b8a"
+        arrow_len = l * 0.08
+        arrow_w = l * 0.035
+
+        p1 = (
+            xe,
+            ye
+        )
+
+        p2 = (
+            xe - tx * arrow_len + nx * arrow_w,
+            ye - ty * arrow_len + ny * arrow_w
+        )
+
+        p3 = (
+            xe - tx * arrow_len - nx * arrow_w,
+            ye - ty * arrow_len - ny * arrow_w
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=[p1[0], p2[0], p3[0], p1[0]],
+                y=[p1[1], p2[1], p3[1], p1[1]],
+                fill="toself",
+                mode="lines",
+                line=dict(
+                    color="#ff2b8a",
+                    width=1
+                ),
+                fillcolor="#ff2b8a",
+                hoverinfo="skip"
+            )
         )
         # giá trị moment
         fig.add_annotation(
@@ -1207,20 +1230,39 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                 # chiều dài mũi tên giống point load
                 arrow_len = total_L * 0.06
 
-                fig.add_annotation(
-                    x=xe,
-                    y=ye,
-                    ax=xe - tx * arrow_len,
-                    ay=ye - ty * arrow_len,
-                    xref="x",
-                    yref="y",
-                    axref="x",
-                    ayref="y",
-                    showarrow=True,
-                    arrowhead=3,
-                    arrowsize=1.1,
-                    arrowwidth=2,
-                    arrowcolor="#ff2b8a"
+                # đầu tam giác mũi tên moment
+
+                arrow_len = total_L * 0.08
+                arrow_w = total_L * 0.035
+
+                nx = -ty
+                ny = tx
+
+                p1 = (xe, ye)
+
+                p2 = (
+                    xe - tx * arrow_len + nx * arrow_w,
+                    ye - ty * arrow_len + ny * arrow_w
+                )
+
+                p3 = (
+                    xe - tx * arrow_len - nx * arrow_w,
+                    ye - ty * arrow_len - ny * arrow_w
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=[p1[0], p2[0], p3[0], p1[0]],
+                        y=[p1[1], p2[1], p3[1], p1[1]],
+                        fill="toself",
+                        mode="lines",
+                        line=dict(
+                            color="#ff2b8a",
+                            width=1
+                        ),
+                        fillcolor="#ff2b8a",
+                        hoverinfo="skip"
+                    )
                 )
                 # trị số moment
                 fig.add_annotation(
