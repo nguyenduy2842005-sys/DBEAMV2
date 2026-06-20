@@ -33,6 +33,23 @@ from fem_core import (
     solve_plane_frame,
     build_docx_bytes,
 )
+# --- Hỗ trợ xuất ảnh chất lượng cao ---
+try:
+    import kaleido
+    KALEIDO_AVAILABLE = True
+except ImportError:
+    KALEIDO_AVAILABLE = False
+
+@st.cache_resource
+def get_kaleido_chrome():
+    try:
+        kaleido.get_chrome_sync()
+        return True
+    except:
+        return False
+
+def ensure_kaleido_chrome() -> bool:
+    return KALEIDO_AVAILABLE and get_kaleido_chrome()
 def create_placeholder_image(text: str) -> bytes:
     """Tạo ảnh PNG với thông báo lỗi dùng Matplotlib."""
     import matplotlib.pyplot as plt
@@ -358,8 +375,8 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
 
 def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
     """
-    Chuyển Plotly Figure sang PNG bằng Matplotlib.
-    Trả về bytes nếu thành công, ngược lại trả về None.
+    Fallback dùng Matplotlib nếu kaleido không khả dụng.
+    Cố gắng giữ màu và fill.
     """
     try:
         import matplotlib.pyplot as plt
@@ -368,45 +385,37 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
 
         plt.figure(figsize=(8, 4.5))
 
-        # Vẽ từng trace
         for tr in fig.data:
-            # Chỉ xử lý các trace có x,y
             if hasattr(tr, 'x') and hasattr(tr, 'y') and tr.x is not None and tr.y is not None:
                 try:
                     x = np.array(tr.x, dtype=float)
                     y = np.array(tr.y, dtype=float)
+                    color = tr.line.color if hasattr(tr, 'line') and tr.line else '#0000ff'
+                    linewidth = tr.line.width if hasattr(tr, 'line') and tr.line else 1.5
+
                     # Vẽ đường
-                    plt.plot(x, y, label=getattr(tr, 'name', None))
-                    # Nếu có fill "toself", vẽ vùng
-                    if hasattr(tr, 'fill') and tr.fill == 'toself':
-                        plt.fill_between(x, y, 0, alpha=0.2)
+                    plt.plot(x, y, color=color, linewidth=linewidth)
+
+                    # Nếu có fill "tozeroy"
+                    if hasattr(tr, 'fill') and tr.fill == 'tozeroy':
+                        plt.fill_between(x, y, 0, color=color, alpha=0.2)
                 except Exception:
                     pass
 
-        # Tiêu đề
-        title = ""
-        if fig.layout.title:
-            if hasattr(fig.layout.title, 'text'):
-                title = fig.layout.title.text
-            else:
-                title = str(fig.layout.title)
+        # Tiêu đề và trục
+        title = fig.layout.title.text if fig.layout.title else ''
         plt.title(title)
-
-        # Nhãn trục
-        if fig.layout.xaxis and hasattr(fig.layout.xaxis, 'title'):
-            if hasattr(fig.layout.xaxis.title, 'text'):
-                plt.xlabel(fig.layout.xaxis.title.text)
-        if fig.layout.yaxis and hasattr(fig.layout.yaxis, 'title'):
-            if hasattr(fig.layout.yaxis.title, 'text'):
-                plt.ylabel(fig.layout.yaxis.title.text)
-
+        if fig.layout.xaxis and fig.layout.xaxis.title:
+            plt.xlabel(fig.layout.xaxis.title.text)
+        if fig.layout.yaxis and fig.layout.yaxis.title:
+            plt.ylabel(fig.layout.yaxis.title.text)
         plt.grid(True)
+
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
         plt.close()
         buf.seek(0)
         return buf.getvalue()
-
     except Exception:
         return None
 def docx_with_images(
@@ -415,8 +424,8 @@ def docx_with_images(
     figures: list[tuple[str, go.Figure]]
 ) -> bytes:
     """
-    Tạo file DOCX với văn bản và các biểu đồ (dùng fallback Matplotlib nếu cần).
-    Luôn trả về bytes, không ném ngoại lệ.
+    Tạo file DOCX với văn bản và các biểu đồ.
+    Ưu tiên dùng kaleido để có ảnh đẹp, nếu không được thì fallback sang Matplotlib.
     """
     from docx import Document
     from docx.shared import Inches
@@ -426,7 +435,6 @@ def docx_with_images(
     doc = Document()
     doc.add_heading(report_title, level=1)
 
-    # Văn bản báo cáo
     for line in report_text.split('\n'):
         doc.add_paragraph(line)
 
@@ -434,48 +442,45 @@ def docx_with_images(
         doc.add_page_break()
         doc.add_heading('Biểu đồ kết quả', level=1)
 
+        # Chuẩn bị kaleido nếu có thể
+        use_kaleido = ensure_kaleido_chrome()
+
         for name, fig in figures:
             doc.add_heading(name, level=2)
 
-            # Tạo file tạm để lưu ảnh
-            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                img_path = tmp.name
+            img_bytes = None
 
-            try:
-                # Thử dùng Plotly to_image (cần Chrome/Kaleido)
+            # 1. Thử dùng kaleido (chất lượng cao)
+            if use_kaleido:
                 try:
-                    img_bytes = fig.to_image(format='png', width=1600, height=900, scale=2)
+                    img_bytes = fig.to_image(
+                        format='png',
+                        width=1600,
+                        height=900,
+                        scale=2,
+                        engine='kaleido'
+                    )
                 except Exception:
-                    # Fallback dùng Matplotlib
-                    img_bytes = plotly_to_png_fallback(fig)
+                    img_bytes = None
 
-                # Nếu vẫn không có ảnh -> tạo placeholder
+            # 2. Nếu thất bại, dùng fallback Matplotlib
+            if img_bytes is None:
+                img_bytes = plotly_to_png_fallback(fig)
                 if img_bytes is None:
+                    # 3. Thậm chí fallback cũng lỗi → placeholder
                     img_bytes = create_placeholder_image(name)
 
-                # Ghi ảnh vào file tạm
-                with open(img_path, 'wb') as f:
+            # Chèn ảnh vào Word
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                with open(tmp_path, 'wb') as f:
                     f.write(img_bytes)
-                # Chèn vào Word
-                doc.add_picture(img_path, width=Inches(6.5))
-
-            except Exception:
-                # Nếu mọi thứ đều lỗi, vẫn chèn placeholder
-                try:
-                    img_bytes = create_placeholder_image(name)
-                    with open(img_path, 'wb') as f:
-                        f.write(img_bytes)
-                    doc.add_picture(img_path, width=Inches(6.5))
-                except Exception:
-                    # Bất khả kháng: thêm văn bản báo lỗi
-                    doc.add_paragraph(f'[Không thể chèn ảnh cho biểu đồ: {name}]')
-
+                doc.add_picture(tmp_path, width=Inches(6.5))
             finally:
-                # Dọn dẹp file tạm
-                if os.path.exists(img_path):
-                    os.unlink(img_path)
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
 
-    # Xuất bytes
     out = io.BytesIO()
     doc.save(out)
     return out.getvalue()
