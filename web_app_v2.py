@@ -365,19 +365,29 @@ def render_single_beam() -> None:
     )
 
     # Load tables
-    def_pl  = pd.DataFrame(columns=["P (kN)", "x (m)"])
-    def_pm  = pd.DataFrame(columns=["M (kNm)", "x (m)"])
-    def_udl = pd.DataFrame(columns=["q (kN/m)", "x1 (m)", "x2 (m)"])
-    def_uvl = pd.DataFrame(columns=["qmax (kN/m)", "x1 (m)", "x2 (m)"])
-    for k, v in [("sb_pl",def_pl),("sb_pm",def_pm),("sb_udl",def_udl),("sb_uvl",def_uvl)]:
-        st.session_state.setdefault(k, v)
+    if "sb_pl" not in st.session_state:
+        st.session_state.sb_pl = pd.DataFrame(columns=["P (kN)", "x (m)"])
+    if "sb_pm" not in st.session_state:
+        st.session_state.sb_pm = pd.DataFrame(columns=["M (kNm)", "x (m)"])
+    if "sb_udl" not in st.session_state:
+        st.session_state.sb_udl = pd.DataFrame(columns=["q (kN/m)", "x1 (m)", "x2 (m)"])
+    if "sb_uvl" not in st.session_state:
+        st.session_state.sb_uvl = pd.DataFrame(columns=["qmax (kN/m)", "x1 (m)", "x2 (m)"])
 
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
     t1, t2, t3, t4 = st.tabs(["Point Load", "Point Moment", "UDL", "UVL"])
-    with t1: pl  = st.data_editor(st.session_state.sb_pl,  key="sb_pl_ed",  **cfg)
-    with t2: pm  = st.data_editor(st.session_state.sb_pm,  key="sb_pm_ed",  **cfg)
-    with t3: udl = st.data_editor(st.session_state.sb_udl, key="sb_udl_ed", **cfg)
-    with t4: uvl = st.data_editor(st.session_state.sb_uvl, key="sb_uvl_ed", **cfg)
+    with t1:
+        pl = st.data_editor(st.session_state.sb_pl, key="sb_pl_ed", **cfg)
+        st.session_state.sb_pl = pl
+    with t2:
+        pm = st.data_editor(st.session_state.sb_pm, key="sb_pm_ed", **cfg)
+        st.session_state.sb_pm = pm
+    with t3:
+        udl = st.data_editor(st.session_state.sb_udl, key="sb_udl_ed", **cfg)
+        st.session_state.sb_udl = udl
+    with t4:
+        uvl = st.data_editor(st.session_state.sb_uvl, key="sb_uvl_ed", **cfg)
+        st.session_state.sb_uvl = uvl
 
     data.point_loads    = clean_rows(pl,  ["P (kN)", "x (m)"])
     data.point_moments  = clean_rows(pm,  ["M (kNm)", "x (m)"])
@@ -478,10 +488,8 @@ def render_continuous_beam() -> None:
         with st.expander(f"Nhịp {i+1}  (L = {span_lengths[i]:.2f} m)", expanded=(i == 0)):
             t1, t2, t3 = st.tabs(["Point Load", "UDL", "Point Moment"])
             with t1:
-                st.session_state.setdefault(
-                    f"cb_pl_{i}",
-                    pd.DataFrame(columns=["P (kN)", "x_local (m)"])
-                )
+                if f"cb_pl_{i}" not in st.session_state:
+                    st.session_state[f"cb_pl_{i}"] = pd.DataFrame(columns=["P (kN)", "x_local (m)"])
 
                 df_pl = st.data_editor(
                     st.session_state[f"cb_pl_{i}"],
@@ -491,10 +499,8 @@ def render_continuous_beam() -> None:
 
                 st.session_state[f"cb_pl_{i}"] = df_pl
             with t2:
-                st.session_state.setdefault(
-                    f"cb_udl_{i}",
-                    pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"])
-                )
+                if f"cb_udl_{i}" not in st.session_state:
+                    st.session_state[f"cb_udl_{i}"] = pd.DataFrame(columns=["q (kN/m)", "x1_local (m)", "x2_local (m)"])
 
                 df_udl = st.data_editor(
                     st.session_state[f"cb_udl_{i}"],
@@ -504,10 +510,8 @@ def render_continuous_beam() -> None:
 
                 st.session_state[f"cb_udl_{i}"] = df_udl
             with t3:
-                st.session_state.setdefault(
-                    f"cb_pm_{i}",
-                    pd.DataFrame(columns=["M (kNm)", "x_local (m)"])
-                )
+                if f"cb_pm_{i}" not in st.session_state:
+                    st.session_state[f"cb_pm_{i}"] = pd.DataFrame(columns=["M (kNm)", "x_local (m)"])
 
                 df_pm = st.data_editor(
                     st.session_state[f"cb_pm_{i}"],
@@ -712,40 +716,40 @@ def render_plane_frame() -> None:
 
     with tab_nd:
         st.caption("Tọa độ nút (x, y) — đơn vị m")
-        df_nodes_def = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0],
-                                      "y (m)": [0.0, 4.0, 4.0, 0.0]})
-        df_nodes = st.session_state.setdefault("pf_nodes", df_nodes_def)
-        df_nodes = st.data_editor(df_nodes, key="pf_nd_ed", **cfg)
+        if "pf_nodes" not in st.session_state:
+            st.session_state["pf_nodes"] = pd.DataFrame({"x (m)": [0.0, 0.0, 5.0, 5.0],
+                                                          "y (m)": [0.0, 4.0, 4.0, 0.0]})
+        df_nodes = st.data_editor(st.session_state["pf_nodes"], key="pf_nd_ed", **cfg)
         st.session_state["pf_nodes"] = df_nodes
 
     with tab_el:
         st.caption("Phần tử: nút đầu, nút cuối, E (kN/m²), A (m²), I (m⁴), UDL_local (kN/m)")
-        df_el_def = pd.DataFrame({
-            "i": [0, 1, 3], "j": [1, 2, 2],
-            "E": [200e6]*3, "A": [0.01]*3, "I": [1e-4]*3, "udl_local": [0.0]*3
-        })
-        df_el = st.session_state.setdefault("pf_elems", df_el_def)
-        df_el = st.data_editor(df_el, key="pf_el_ed", **cfg)
+        if "pf_elems" not in st.session_state:
+            st.session_state["pf_elems"] = pd.DataFrame({
+                "i": [0, 1, 3], "j": [1, 2, 2],
+                "E": [200e6]*3, "A": [0.01]*3, "I": [1e-4]*3, "udl_local": [0.0]*3
+            })
+        df_el = st.data_editor(st.session_state["pf_elems"], key="pf_el_ed", **cfg)
         st.session_state["pf_elems"] = df_el
 
     with tab_sup:
         st.caption("Gối: nút, ux_fixed, uy_fixed, rz_fixed (True/False)")
-        df_sup_def = pd.DataFrame({"node": [0, 3],
-                                    "ux": [True, True],
-                                    "uy": [True, True],
-                                    "rz": [True, True]})
-        df_sup = st.session_state.setdefault("pf_sups", df_sup_def)
-        df_sup = st.data_editor(df_sup, key="pf_sup_ed", **cfg)
+        if "pf_sups" not in st.session_state:
+            st.session_state["pf_sups"] = pd.DataFrame({"node": [0, 3],
+                                                         "ux": [True, True],
+                                                         "uy": [True, True],
+                                                         "rz": [True, True]})
+        df_sup = st.data_editor(st.session_state["pf_sups"], key="pf_sup_ed", **cfg)
         st.session_state["pf_sups"] = df_sup
 
     with tab_pl_nd:
         st.caption("Tải tập trung tại nút: Fx (kN), Fy (kN), Mz (kNm)")
-        df_nload_def = pd.DataFrame({"node": pd.Series(dtype=int),
-                                      "Fx (kN)": pd.Series(dtype=float),
-                                      "Fy (kN)": pd.Series(dtype=float),
-                                      "Mz (kNm)": pd.Series(dtype=float)})
-        df_nload = st.session_state.setdefault("pf_nloads", df_nload_def)
-        df_nload = st.data_editor(df_nload, key="pf_nl_ed", **cfg)
+        if "pf_nloads" not in st.session_state:
+            st.session_state["pf_nloads"] = pd.DataFrame({"node": pd.Series(dtype=int),
+                                                           "Fx (kN)": pd.Series(dtype=float),
+                                                           "Fy (kN)": pd.Series(dtype=float),
+                                                           "Mz (kNm)": pd.Series(dtype=float)})
+        df_nload = st.data_editor(st.session_state["pf_nloads"], key="pf_nl_ed", **cfg)
         st.session_state["pf_nloads"] = df_nload
 
     with tab_udl_el:
