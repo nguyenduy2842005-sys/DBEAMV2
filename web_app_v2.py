@@ -161,21 +161,48 @@ def reset_keys_with_prefix(*prefixes: str) -> None:
             st.session_state.pop(k, None)
 
 
-
+def base_figure(
+    title: str,
+    x_range: float,
+    y_title: str = ""
+) -> go.Figure:
     fig = go.Figure()
+
     fig.update_layout(
-        title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center",
-                   y=0.98, yanchor="top", font=dict(size=15, color=AXIS)),
+        title=dict(
+            text=f"<b>{title}</b>",
+            x=0.5,
+            xanchor="center",
+            y=0.98,
+            yanchor="top",
+            font=dict(size=15, color=AXIS),
+        ),
         height=PLOT_HEIGHT,
         margin=dict(l=55, r=20, t=60, b=45),
-        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
+        paper_bgcolor=PLOT_BG,
+        plot_bgcolor=PLOT_BG,
         showlegend=False,
-        xaxis=dict(title="x (m)", range=[-x_range/20, 1.05*x_range],
-                   gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS,
-                   mirror=True, ticks="outside", title_font=dict(size=13)),
-        yaxis=dict(title=y_title, gridcolor=GRID, zerolinecolor=AXIS,
-                   linecolor=AXIS, mirror=True, ticks="outside", title_font=dict(size=13)),
+        xaxis=dict(
+            title="x (m)",
+            range=[-x_range / 20, 1.05 * x_range],
+            gridcolor=GRID,
+            zerolinecolor=AXIS,
+            linecolor=AXIS,
+            mirror=True,
+            ticks="outside",
+            title_font=dict(size=13),
+        ),
+        yaxis=dict(
+            title=y_title,
+            gridcolor=GRID,
+            zerolinecolor=AXIS,
+            linecolor=AXIS,
+            mirror=True,
+            ticks="outside",
+            title_font=dict(size=13),
+        ),
     )
+
     return fig
 
 
