@@ -210,45 +210,91 @@ st.set_page_config(
 def inject_css() -> None:
     st.markdown("""
     <style>
-    #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
+    /* Ẩn các thành phần không cần thiết */
+    #MainMenu, footer, [data-testid="stToolbar"] {
+        display: none !important;
+    }
 
-    /* === HIỆN NÚT MỞ SIDEBAR TRÊN MOBILE === */
+    /* === HIỂN THỊ NÚT MỞ SIDEBAR === */
     [data-testid="collapsedControl"] {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
+        position: fixed !important;
+        left: 0.5rem !important;
+        top: 0.75rem !important;
+        z-index: 99999 !important; /* cao hơn các lớp khác */
+        color: var(--text-color) !important;
+        font-size: 1.5rem !important;
+        cursor: pointer !important;
     }
+
+    /* Đảm bảo header không che nút */
     header {
         display: flex !important;
         background: transparent !important;
+        position: relative !important;
+        z-index: 9999 !important;
     }
 
-    .block-container { padding-top:1.1rem; padding-bottom:1.5rem; max-width:1680px; }
+    /* === ĐẢM BẢO SIDEBAR HOẠT ĐỘNG ĐÚNG === */
+    section[data-testid="stSidebar"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 21rem !important;
+        transform: translateX(0) !important;
+        transition: none !important; /* tránh hiệu ứng làm mờ */
+    }
 
-    /* Phần CSS còn lại (giữ nguyên từ code gốc) */
+    /* Khi sidebar ở trạng thái thu gọn, vẫn giữ khả năng mở */
+    .st-emotion-cache-1r6slb0 {
+        display: block !important;
+    }
+
+    /* Các phần còn lại giữ nguyên */
+    .block-container {
+        padding-top: 1.1rem;
+        padding-bottom: 1.5rem;
+        max-width: 1680px;
+    }
     .metric-strip {
-        display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
-        gap:10px; margin:0.2rem 0 0.8rem;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0.2rem 0 0.8rem;
     }
     .metric-card {
         background: var(--background-color);
         border: 1px solid var(--secondary-background-color);
-        border-radius:6px; padding:10px 12px;
+        border-radius: 6px;
+        padding: 10px 12px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .metric-label { color: var(--text-color); opacity: 0.7; font-size:0.78rem; margin-bottom:3px; }
-    .metric-value { color: var(--text-color); font-weight:700; font-size:1.08rem; }
-
+    .metric-label {
+        color: var(--text-color);
+        opacity: 0.7;
+        font-size: 0.78rem;
+        margin-bottom: 3px;
+    }
+    .metric-value {
+        color: var(--text-color);
+        font-weight: 700;
+        font-size: 1.08rem;
+    }
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-color: var(--secondary-background-color);
     }
     .stPlotlyChart {
         border: 1px solid var(--secondary-background-color);
-        border-radius:6px; padding:6px;
+        border-radius: 6px;
+        padding: 6px;
         background-color: transparent !important;
     }
-    textarea { font-family:Consolas,"Courier New",monospace !important; }
+    textarea {
+        font-family: Consolas, "Courier New", monospace !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════
@@ -1871,12 +1917,7 @@ def _hex_to_rgb(hex_color: str) -> str:
 def main():
     inject_css()
     st.title("🏗️ DBeam Analysis")
-
-    # Ví dụ: thêm nút trong giao diện chính (không cần thiết)
-    if st.button("☰ Mở Sidebar"):
-        # Không thể điều khiển sidebar bằng JavaScript từ đây, nhưng có thể dùng st.session_state
-        st.session_state.sidebar_open = not st.session_state.get("sidebar_open", True)
-        st.rerun()
+    # Xóa dòng if st.button("☰ Mở Sidebar") ...
     tab1, tab2, tab3 = st.tabs(["📏 Single Beam", "🔗 Continuous Beam", "🏛️ Plane Frame"])
     with tab1: render_single_beam()
     with tab2: render_continuous_beam()
