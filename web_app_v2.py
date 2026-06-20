@@ -1,5 +1,5 @@
 """
-web_app_v2.py — Beam Analysis Suite (Đã sửa lỗi Dark Mode & Vẽ gối Roller)
+web_app_v2.py — Beam Analysis Suite (Đã sửa triệt để lỗi thụt dòng IndentationError)
 Tabs:
   1. Single Beam     — giữ nguyên logic gốc
   2. Continuous Beam — FEM Euler-Bernoulli
@@ -27,18 +27,9 @@ from fem_core import (
 )
 
 # ══════════════════════════════════════════════════════
-#  GLOBAL CONSTANTS & DYNAMIC THEME HELPERS
+#  GLOBAL CONSTANTS & SAFE ADAPTIVE THEME
 # ══════════════════════════════════════════════════════
 PLOT_HEIGHT = 315
-
-# Màu sắc biểu đồ (Tự động đảo ngược nền nếu dùng Dark Mode)
-def get_plot_theme():
-    # Nhận diện màu nền hiện tại của Streamlit để đồng bộ Plotly
-    return dict(
-        bg="rgba(0,0,0,0)", # Nền trong suốt để ăn theo nền app
-        grid="#444d56" if st.get_option("theme.base") == "dark" else "#d9e0e8",
-        axis="#ffffff" if st.get_option("theme.base") == "dark" else "#263238"
-    )
 
 COLOR_SFD   = "#0b5fff"
 COLOR_BMD   = "#ff2b2b"
@@ -48,7 +39,6 @@ COLOR_BEAM  = "#7a7f85"
 COLOR_SUP   = "#ef1d14"
 
 def base_figure(title, length, y_title=""):
-    theme = get_plot_theme()
     fig = go.Figure()
 
     fig.update_layout(
@@ -56,35 +46,30 @@ def base_figure(title, length, y_title=""):
             text=f"<b>{title}</b>",
             x=0.5,
             xanchor="center",
-            font=dict(size=15, color=theme["axis"])
+            font=dict(size=15)
         ),
         height=PLOT_HEIGHT,
         margin=dict(l=55, r=20, t=60, b=45),
-        paper_bgcolor=theme["bg"],
-        plot_bgcolor=theme["bg"],
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
 
         xaxis=dict(
             title="x (m)",
             range=[0, length],
-            gridcolor=theme["grid"],
-            zerolinecolor=theme["axis"],
-            linecolor=theme["axis"],
-            titlefont=dict(color=theme["axis"]),
-            tickfont=dict(color=theme["axis"]),
+            zeroline=True,
             mirror=True
         ),
 
         yaxis=dict(
             title=y_title,
-            gridcolor=theme["grid"],
-            zerolinecolor=theme["axis"],
-            linecolor=theme["axis"],
-            titlefont=dict(color=theme["axis"]),
-            tickfont=dict(color=theme["axis"]),
+            zeroline=True,
             mirror=True
         )
     )
+
+    fig.update_xaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
+    fig.update_yaxes(showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)")
     return fig
 
 # ══════════════════════════════════════════════════════
@@ -100,11 +85,9 @@ st.set_page_config(
 def inject_css() -> None:
     st.markdown("""
     <style>
-    /* Xóa bỏ việc ép cứng màu nền tĩnh để tương thích với các chế độ Dark Mode ẩn */
     #MainMenu, footer, header, [data-testid="stToolbar"] { display:none !important; }
     .block-container { padding-top:1.1rem; padding-bottom:1.5rem; max-width:1680px; }
     
-    /* Thiết kế Metric Strip sử dụng biến CSS linh hoạt */
     .metric-strip {
         display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
         gap:10px; margin:0.2rem 0 0.8rem;
@@ -118,13 +101,13 @@ def inject_css() -> None:
     .metric-label { color: var(--text-color); opacity: 0.7; font-size:0.78rem; margin-bottom:3px; }
     .metric-value { color: var(--text-color); font-weight:700; font-size:1.08rem; }
     
-    /* Đảm bảo đường viền mượt mà ở cả 2 chế độ */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-color: var(--secondary-background-color);
     }
     .stPlotlyChart {
         border: 1px solid var(--secondary-background-color);
         border-radius:6px; padding:6px;
+        background-color: transparent !important;
     }
     textarea { font-family:Consolas,"Courier New",monospace !important; }
     </style>
@@ -577,24 +560,21 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
 
     # Nhãn nhịp
     x_acc = 0.0
-    theme = get_plot_theme()
     for i, Ls in enumerate(span_lengths):
         mid = x_acc + Ls / 2
-        fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10, "color": theme["axis"]})
+        fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10})
         x_acc += Ls
 
-    # ── VẼ GỐI ĐỠ (ĐÃ SỬA: ĐƯỢC CHIA RÕ RÀNG PIN & ROLLER) ──
+    # VẼ GỐI ĐỠ PIN & ROLLER KHÔNG LỖI
     node_xs = [0.0] + list(np.cumsum(span_lengths))
     for i, kind in enumerate(support_kinds):
         xp = node_xs[i]
         if kind == "pin":
-            # Gối cố định: Hình tam giác trơn
             fig.add_trace(go.Scatter(
                 x=[xp, xp + total_L/34, xp - total_L/34, xp], y=[0, -0.37, -0.37, 0],
                 fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
             ))
         elif kind == "roller":
-            # Gối di động: Hình tam giác ngắn hơn + có thanh trượt gạch ngang ở dưới đáy
             fig.add_trace(go.Scatter(
                 x=[xp, xp + total_L/36, xp - total_L/36, xp], y=[0, -0.28, -0.28, 0],
                 fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
@@ -604,7 +584,6 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
                 mode="lines", line={"color": COLOR_SUP, "width": 3}, hoverinfo="skip"
             ))
         elif kind == "fixed":
-            # Ngàm cứng
             fig.add_shape(type="rect", x0=xp-total_L/80, x1=xp+total_L/80, y0=-0.42, y1=0.42, fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
         fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
@@ -638,7 +617,6 @@ def render_plane_frame() -> None:
                 if k.startswith("pf_"): st.session_state.pop(k, None)
             st.rerun()
         st.divider()
-        st.info("**Hướng dẫn:**\n1. Nhập tọa độ nút\n2. Nhập phần tử\n3. Nhập gối đỡ\n4. Nhập tải trọng\n5. Nhấn Solve")
 
     cfg = {"width": "stretch", "num_rows": "dynamic", "hide_index": True}
     tab_nd, tab_el, tab_sup, tab_pl_nd, _ = st.tabs(["🔵 Nodes", "📐 Elements", "🔒 Supports", "⬇️ Node Loads", "📏 Element UDL"])
@@ -707,7 +685,7 @@ def _pf_geometry_plot(df_nodes, df_el, df_sup, result_pf: PlaneFrameResult | Non
         try:
             i, j = int(r["i"]), int(r["j"])
             ni, nj = nodes_xy[i], nodes_xy[j]
-            fig.add_trace(go.Scatter(x=[ni[0], nj[0]], y=[ni[1], nj[1]], mode="lines+markers", line={"color": COLOR_BEAM, "width": 5}, marker={"size": 8, "color": "#263238"}, showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=[ni[0], nj[0]], y=[ni[1], nj[1]], mode="lines+markers", line={"color": COLOR_BEAM, "width": 5}, marker={"size": 8}, showlegend=False, hoverinfo="skip"))
         except Exception: pass
 
     for i, (xn, yn) in enumerate(nodes_xy):
@@ -729,13 +707,12 @@ def _pf_diagram_plot(result_pf: PlaneFrameResult | None, field: str, title: str)
     unit  = unit_map.get(field, "")
 
     fig = go.Figure()
-    theme = get_plot_theme()
     fig.update_layout(
-        title=dict(text=f"<b>{title}</b>", x=0.5, font=dict(size=14, color=theme["axis"])),
+        title=dict(text=f"<b>{title}</b>", x=0.5, font=dict(size=14)),
         height=PLOT_HEIGHT, margin=dict(l=40, r=20, t=55, b=40),
-        paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], showlegend=False,
-        xaxis=dict(title="x (m)", gridcolor=theme["grid"], linecolor=theme["axis"], tickfont=dict(color=theme["axis"]), titlefont=dict(color=theme["axis"])),
-        yaxis=dict(title=f"{unit}", gridcolor=theme["grid"], linecolor=theme["axis"], tickfont=dict(color=theme["axis"]), titlefont=dict(color=theme["axis"])),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False,
+        xaxis=dict(title="x (m)", showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)"),
+        yaxis=dict(title=f"{unit}", showgrid=True, linecolor="gray", gridcolor="rgba(128,128,128,0.2)"),
     )
 
     if result_pf is None:
