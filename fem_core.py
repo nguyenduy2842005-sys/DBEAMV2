@@ -180,7 +180,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
 
     gnode = 0
     for s_idx, span in enumerate(spans):
-        n_elem = max(2, round(span.length / (0.01 * total_L)))
+        n_elem = max(10, round(span.length / (0.002 * total_L)))
         Le = span.length / n_elem
         for e in range(n_elem):
             mesh_elems.append({
@@ -333,16 +333,28 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
 
         for xi in xi_arr:
             x = x0g + xi * Le
-            # Hermite shape functions
-            N  = np.array([1-3*xi**2+2*xi**3, Le*xi*(1-xi)**2, 3*xi**2-2*xi**3, Le*xi**2*(xi-1)])
-            dN = np.array([(-6*xi+6*xi**2)/Le, 1-4*xi+3*xi**2, (6*xi-6*xi**2)/Le, -2*xi+3*xi**2])
-            d2N = np.array([(-6+12*xi)/Le**2, (-4+6*xi)/Le, (6-12*xi)/Le**2, (-2+6*xi)/Le])
-            d3N = np.array([12/Le**3, 6/Le**2, -12/Le**3, 6/Le**2])
+            x_local = xi * Le  # vị trí cục bộ trong phần tử
 
-            w_val  = float(N  @ u_e)
+            # (Giữ nguyên các dòng tính N, dN, d2N, d3N cũ)
+            # ...
+
+            # 1. Tính giá trị từ hàm nội suy (phần do lực nút)
+            w_val = float(N @ u_e)
             th_val = float(dN @ u_e)
-            M_val = float(EI * (d2N @ u_e))
-            V_val = float(EI * (d3N @ u_e))
+            M_fem = float(EI * (d2N @ u_e))
+            V_fem = float(EI * (d3N @ u_e))
+
+            # 2. Hiệu chỉnh do tải trọng UDL (q) cục bộ trên phần tử
+            # Tìm q đang tác dụng tại vị trí x này
+            q_local = 0
+            for q_val, x1_sp, x2_sp in spans[s_idx].udls:
+                if x1_sp <= x_local + (e_idx % n_elem) * Le <= x2_sp:
+                    q_local = q_val
+                    break
+
+            # Công thức hiệu chỉnh để khớp giải tích:
+            V_val = V_fem + q_local * (Le / 2 - x_local)
+            M_val = M_fem + (q_local * x_local * (Le - x_local)) / 2
 
             x_out_list.append(x)
             V_list.append(V_val)
