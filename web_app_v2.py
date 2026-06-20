@@ -211,11 +211,46 @@ def inject_css() -> None:
     st.markdown("""
     <style>
     #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
+
+    /* === HIỆN NÚT MỞ SIDEBAR TRÊN MOBILE === */
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    header {
+        display: flex !important;
+        background: transparent !important;
+    }
+
     .block-container { padding-top:1.1rem; padding-bottom:1.5rem; max-width:1680px; }
-    ...
+
+    /* Phần CSS còn lại (giữ nguyên từ code gốc) */
+    .metric-strip {
+        display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+        gap:10px; margin:0.2rem 0 0.8rem;
+    }
+    .metric-card {
+        background: var(--background-color);
+        border: 1px solid var(--secondary-background-color);
+        border-radius:6px; padding:10px 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .metric-label { color: var(--text-color); opacity: 0.7; font-size:0.78rem; margin-bottom:3px; }
+    .metric-value { color: var(--text-color); font-weight:700; font-size:1.08rem; }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: var(--secondary-background-color);
+    }
+    .stPlotlyChart {
+        border: 1px solid var(--secondary-background-color);
+        border-radius:6px; padding:6px;
+        background-color: transparent !important;
+    }
+    textarea { font-family:Consolas,"Courier New",monospace !important; }
     </style>
     """, unsafe_allow_html=True)
-
 # ══════════════════════════════════════════════════════
 #  SHARED HELPERS
 # ══════════════════════════════════════════════════════
@@ -423,12 +458,13 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
 
                     # Mũi tên: vẽ từ (x, y) đến (ax, ay) (đúng với Plotly)
                     if ann.showarrow:
-                        x_start = ann.x if ann.x is not None else 0
-                        y_start = ann.y if ann.y is not None else 0
-                        x_end = ann.ax if ann.ax is not None else 0
-                        y_end = ann.ay if ann.ay is not None else 0
+                        # Tail là (ann.ax, ann.ay), Head là (ann.x, ann.y)
+                        x_tail = ann.ax if ann.ax is not None else 0
+                        y_tail = ann.ay if ann.ay is not None else 0
+                        x_head = ann.x if ann.x is not None else 0
+                        y_head = ann.y if ann.y is not None else 0
 
-                        plt.annotate('', xy=(x_end, y_end), xytext=(x_start, y_start),
+                        plt.annotate('', xy=(x_head, y_head), xytext=(x_tail, y_tail),
                                      arrowprops=dict(arrowstyle='->',
                                                      color=ann.arrowcolor if ann.arrowcolor else 'black',
                                                      lw=ann.arrowwidth if ann.arrowwidth else 1.5))
@@ -848,30 +884,37 @@ def plot_bmd_single(result: BeamResult) -> go.Figure:
 
 
 def plot_elastic_single(data: BeamInput, result: BeamResult | None) -> go.Figure:
-    fig = plot_load_diagram_single(data)
-    fig.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 15}})
-
-    # Giữ lại thanh dầm gốc và gối đỡ, xóa bỏ các mũi tên tải trọng để tránh rối mắt
-    fig.layout.annotations = tuple()
-
-    if result is not None:
-        # Tính toán tỷ lệ trực quan cho đường cong võng
-        mw = float(np.max(np.abs(result.deflection)))
-        y = -result.deflection * (0.65 / mw) if mw > 0 else result.deflection
-
-        # Thêm đường cong võng đè lên trên thanh dầm
-        fig.add_trace(go.Scatter(
-            x=result.x, y=y, mode="lines",
-            line={"color": COLOR_ELAST, "width": 4},
-            hovertemplate="x=%{x:.2f}m  w/EI=%{customdata:.4f}<extra></extra>",
-            customdata=result.deflection
-        ))
-
+    l = data.length
+    # Tạo figure mới với layout giống load diagram
+    fig = base_figure("Elastic Curve", l)
     fig.update_yaxes(
         range=[-1.5, 1.2],
         fixedrange=True,
         title="Deflection (visual)"
     )
+    # Vẽ dầm
+    fig.add_trace(go.Scatter(
+        x=[0, l], y=[0, 0],
+        mode="lines",
+        line={"color": COLOR_BEAM, "width": 8},
+        hoverinfo="skip"
+    ))
+    # Vẽ gối
+    draw_supports_single(fig, data)
+
+    # Vẽ đường cong võng nếu có kết quả
+    if result is not None:
+        mw = float(np.max(np.abs(result.deflection)))
+        y = -result.deflection * (0.65 / mw) if mw > 0 else result.deflection
+        fig.add_trace(go.Scatter(
+            x=result.x, y=y,
+            mode="lines",
+            line={"color": COLOR_ELAST, "width": 4},
+            hovertemplate="x=%{x:.2f}m  w/EI=%{customdata:.4f}<extra></extra>",
+            customdata=result.deflection
+        ))
+
+    fig.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 15}})
     return fig
 
 
@@ -1825,10 +1868,15 @@ def _hex_to_rgb(hex_color: str) -> str:
 # ══════════════════════════════════════════════════════
 #  MAIN RUNNER
 # ══════════════════════════════════════════════════════
-def main() -> None:
+def main():
     inject_css()
-    st.title("🏗️ DBeam Analysis  ")
+    st.title("🏗️ DBeam Analysis")
 
+    # Ví dụ: thêm nút trong giao diện chính (không cần thiết)
+    if st.button("☰ Mở Sidebar"):
+        # Không thể điều khiển sidebar bằng JavaScript từ đây, nhưng có thể dùng st.session_state
+        st.session_state.sidebar_open = not st.session_state.get("sidebar_open", True)
+        st.rerun()
     tab1, tab2, tab3 = st.tabs(["📏 Single Beam", "🔗 Continuous Beam", "🏛️ Plane Frame"])
     with tab1: render_single_beam()
     with tab2: render_continuous_beam()
