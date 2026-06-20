@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import io
 import math
+import zipfile
+from xml.sax.saxutils import escape as _xml_escape
 from typing import Iterable
 
 import numpy as np
@@ -37,6 +39,21 @@ COLOR_ELAST = "#ff8800"
 COLOR_AXIAL = "#9b27af"
 COLOR_BEAM  = "#7a7f85"
 COLOR_SUP   = "#ef1d14"
+
+def _padded_range(values: np.ndarray, pad_frac: float = 0.18, min_span: float = 1.0) -> tuple[float, float]:
+    """Tính khoảng [min,max] có đệm biên hợp lý cho trục y, dựa trên dữ liệu thật.
+    Đảm bảo trục được KHÓA Ở MỘT TỶ LỆ CỐ ĐỊNH (không tự ý co giãn theo từng điểm hover),
+    nhưng vẫn hiển thị trọn vẹn toàn bộ biểu đồ."""
+    vmin = float(np.min(values))
+    vmax = float(np.max(values))
+    span = vmax - vmin
+    if span < min_span:
+        center = (vmax + vmin) / 2
+        vmin, vmax = center - min_span / 2, center + min_span / 2
+        span = vmax - vmin
+    pad = span * pad_frac
+    return (vmin - pad, vmax + pad)
+
 
 def base_figure(title, length, y_title=""):
 
@@ -251,6 +268,75 @@ def metric_html(values: list[tuple[str, str]]) -> None:
     st.markdown(f"<div class='metric-strip'>{cards}</div>", unsafe_allow_html=True)
 
 
+def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toán") -> bytes:
+    """
+    Tạo file .docx hợp lệ TỐI THIỂU bằng cách ghi trực tiếp định dạng OOXML
+    (ZIP + XML chuẩn của Word), KHÔNG phụ thuộc thư viện python-docx.
+
+    Đây là lưới an toàn cuối cùng: nếu vì lý do nào đó server chưa cài được
+    python-docx (ví dụ quên cập nhật requirements.txt), người dùng web VẪN
+    luôn tải được file .docx hợp lệ — không bao giờ thấy lỗi "hãy tự cài thư viện".
+    """
+    def esc(s: str) -> str:
+        return _xml_escape(s).replace("\t", "    ")
+
+    body_paragraphs = []
+    title_xml = (
+        f'<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'
+        f'<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr>'
+        f'<w:t xml:space="preserve">{esc(title)}</w:t></w:r></w:p>'
+    )
+    body_paragraphs.append(title_xml)
+    body_paragraphs.append('<w:p/>')
+
+    for line in report_text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("="):
+            continue
+        is_heading = bool(stripped) and stripped[0].isdigit() and ". " in stripped[:4]
+        if is_heading:
+            run = (f'<w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr>'
+                   f'<w:t xml:space="preserve">{esc(line)}</w:t></w:r>')
+        else:
+            run = (f'<w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>'
+                   f'<w:sz w:val="18"/></w:rPr>'
+                   f'<w:t xml:space="preserve">{esc(line) if line.strip() else " "}</w:t></w:r>')
+        body_paragraphs.append(f'<w:p>{run}</w:p>')
+
+    body_xml = "".join(body_paragraphs)
+
+    document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>{body_xml}
+<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>
+<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1417"/></w:sectPr>
+</w:body></w:document>'''
+
+    content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>'''
+
+    rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>'''
+
+    doc_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>'''
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", content_types)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("word/document.xml", document_xml)
+        z.writestr("word/_rels/document.xml.rels", doc_rels)
+    return buf.getvalue()
+
+
 def report_panel(report_text: str | None, report_title: str, key_prefix: str) -> None:
     st.subheader("📋 Thuyết minh tính toán")
     if not report_text:
@@ -283,7 +369,18 @@ def report_panel(report_text: str | None, report_title: str, key_prefix: str) ->
                 key=f"{key_prefix}_dl_docx",
             )
         except ImportError:
-            st.info("Cài python-docx để xuất .docx: `pip install python-docx`")
+            # Fallback: vẫn cho người dùng tải .docx được ngay (không cần cài gì),
+            # dùng writer .docx tối giản viết thủ công bằng XML chuẩn OOXML —
+            # không phụ thuộc thư viện python-docx.
+            docx_bytes = _minimal_docx_bytes(report_text, report_title)
+            st.download_button(
+                "⬇️ Xuất .docx",
+                data=docx_bytes,
+                file_name=f"{key_prefix}_report.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key=f"{key_prefix}_dl_docx",
+            )
 
 
 # ══════════════════════════════════════════════════════
@@ -503,19 +600,23 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
 
 
 def plot_sfd_single(result: BeamResult) -> go.Figure:
-    fig = base_figure("Shear Force Diagram", float(result.x[-1]), "Shear (kN)")
+    v_range = _padded_range(result.shear)
+    fig = synced_figure("Shear Force Diagram", float(result.x[-1]), y_range=v_range, y_title="Shear (kN)")
     fig.add_trace(go.Scatter(x=result.x, y=result.shear, mode="lines",
                              fill="tozeroy", line={"color": COLOR_SFD, "width": 2},
                              fillcolor="rgba(11,95,255,0.20)",
                              hovertemplate="x=%{x:.2f}m  V=%{y:.2f}kN<extra></extra>"))
+    fig.update_yaxes(fixedrange=True)
     return fig
 
 
 def plot_bmd_single(result: BeamResult) -> go.Figure:
-    fig = base_figure(
+    m_range = _padded_range(result.moment)
+    fig = synced_figure(
         "Bending Moment Diagram",
         float(result.x[-1]),
-        "Moment (kNm)"
+        y_range=m_range,
+        y_title="Moment (kNm)"
     )
     fig.add_trace(go.Scatter(
         x=result.x,
@@ -530,7 +631,7 @@ def plot_bmd_single(result: BeamResult) -> go.Figure:
         hovertemplate=
         "x=%{x:.2f}m  M=%{y:.2f}kNm<extra></extra>"
     ))
-    fig.update_yaxes(autorange="reversed")
+    fig.update_yaxes(autorange="reversed", fixedrange=True)
     return fig
 
 
@@ -761,8 +862,10 @@ def render_continuous_beam() -> None:
         with a: st.plotly_chart(fig_load, use_container_width=True)
         with b:
             if result_cb:
-                fig_sfd = base_figure("Shear Force Diagram", total_L_plot, "V (kN)")
+                v_range = _padded_range(result_cb.shear)
+                fig_sfd = synced_figure("Shear Force Diagram", total_L_plot, y_range=v_range, y_title="V (kN)")
                 fig_sfd.add_trace(go.Scatter(x=result_cb.x_global, y=result_cb.shear, mode="lines", fill="tozeroy", line={"color": COLOR_SFD, "width": 2}, fillcolor="rgba(11,95,255,0.20)", hovertemplate="x=%{x:.3f}m  V=%{y:.3f}kN<extra></extra>"))
+                fig_sfd.update_yaxes(fixedrange=True)
                 st.plotly_chart(fig_sfd, use_container_width=True)
             else:
                 st.plotly_chart(base_figure("Shear Force Diagram", total_L_plot, "V (kN)"), use_container_width=True)
@@ -770,9 +873,10 @@ def render_continuous_beam() -> None:
         c, d = st.columns(2)
         with c:
             if result_cb:
-                fig_bmd = base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)")
+                m_range = _padded_range(result_cb.moment)
+                fig_bmd = synced_figure("Bending Moment Diagram", total_L_plot, y_range=m_range, y_title="M (kNm)")
                 fig_bmd.add_trace(go.Scatter(x=result_cb.x_global, y=result_cb.moment, mode="lines", fill="tozeroy", line={"color": COLOR_BMD, "width": 2}, fillcolor="rgba(255,43,43,0.22)", hovertemplate="x=%{x:.3f}m  M=%{y:.3f}kNm<extra></extra>"))
-                fig_bmd.update_yaxes(autorange="reversed")
+                fig_bmd.update_yaxes(autorange="reversed", fixedrange=True)
                 st.plotly_chart(fig_bmd, use_container_width=True)
             else:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
@@ -1164,8 +1268,13 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                 y=y,
                 ax=xp,
                 ay=ay,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
                 showarrow=True,
                 arrowhead=3,
+                arrowsize=1.1,
                 arrowwidth=2,
                 arrowcolor="#0b5fff"
             )
