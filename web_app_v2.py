@@ -116,8 +116,16 @@ def synced_figure(title, length, y_range=(-1.5, 1.2), y_title=""):
         linecolor="gray",
         gridcolor="rgba(128,128,128,0.2)"
     )
-
+    def single_synced_plot(title, length, y_title=""):
+        return synced_figure(
+            title,
+            length,
+            y_range=(-1.5, 1.2),
+            y_title=y_title
+        )
     return fig
+
+
 # ══════════════════════════════════════════════════════
 #  PAGE CONFIG & ADAPTIVE CSS
 # ══════════════════════════════════════════════════════
@@ -374,12 +382,26 @@ def plot_sfd_single(result: BeamResult) -> go.Figure:
 
 
 def plot_bmd_single(result: BeamResult) -> go.Figure:
-    fig = base_figure("Bending Moment Diagram", float(result.x[-1]), "Moment (kNm)")
-    fig.add_trace(go.Scatter(x=result.x, y=result.moment, mode="lines",
-                             fill="tozeroy", line={"color": COLOR_BMD, "width": 2},
-                             fillcolor="rgba(255,43,43,0.22)",
-                             hovertemplate="x=%{x:.2f}m  M=%{y:.2f}kNm<extra></extra>"))
-    fig.update_yaxes(autorange="reversed")
+    fig = base_figure(
+        "Bending Moment Diagram",
+        float(result.x[-1]),
+        "Moment (kNm)"
+    )
+
+    fig.add_trace(go.Scatter(
+        x=result.x,
+        y=result.moment,
+        mode="lines",
+        fill="tozeroy",
+        line={
+            "color": COLOR_BMD,
+            "width": 2
+        },
+        fillcolor="rgba(255,43,138,0.22)",
+        hovertemplate=
+        "x=%{x:.2f}m  M=%{y:.2f}kNm<extra></extra>"
+    ))
+
     return fig
 
 
@@ -1051,7 +1073,7 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                     showarrow=False,
                     font=dict(
                         size=24,
-                        color="#ff2b2b"
+                        color="#ff2b8a"
                     )
                 )
 
@@ -1063,7 +1085,7 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                     showarrow=False,
                     font=dict(
                         size=10,
-                        color="#ff2b2b"
+                        color="#ff2b8a"
                     )
                 )
 
