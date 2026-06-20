@@ -402,15 +402,19 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
         y0 = 0.25
 
         if M > 0:
+            # CCW: từ góc dưới-phải (-45°) quét lên tới góc trên-trái (150°)
+            # → mũi tên ở cuối chỉ sang TRÁI, giống hệt bản MATLAB gốc
             theta = np.linspace(
-                np.pi * 0.25,
-                np.pi * 1.75,
+                -np.pi * 0.25,
+                np.pi * 0.85,
                 40
             )
         else:
+            # CW: từ góc dưới-trái (-135°=225°) quét xuống tới góc trên-phải (30°)
+            # → mũi tên ở cuối chỉ sang PHẢI (đối xứng gương với trường hợp M>0)
             theta = np.linspace(
-                -np.pi * 0.75,
-                np.pi * 0.75,
+                np.pi * 1.25,
+                np.pi * 0.15,
                 40
             )
 
@@ -1189,11 +1193,13 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                 r = total_L * 0.025  # bán kính vòng moment
                 y0 = 0.25
 
-                # góc tạo vòng cung
+                # góc tạo vòng cung — ĐỒNG BỘ với bản MATLAB gốc:
+                # M > 0 → quét CCW (dưới-phải → trên-trái, mũi tên chỉ sang trái)
+                # M < 0 → quét CW  (dưới-trái → trên-phải, mũi tên chỉ sang phải)
                 if M > 0:
-                    theta = np.linspace(np.pi * 0.25, np.pi * 1.75, 40)
+                    theta = np.linspace(-np.pi * 0.25, np.pi * 0.85, 40)
                 else:
-                    theta = np.linspace(-np.pi * 0.75, np.pi * 0.75, 40)
+                    theta = np.linspace(np.pi * 1.25, np.pi * 0.15, 40)
 
                 x_arc = xm + r * np.cos(theta)
                 y_arc = y0 + r * np.sin(theta)
