@@ -240,11 +240,6 @@ def inject_css() -> None:
         transform: scale(1.05);
     }
 
-    /* Đảm bảo sidebar có thể toggle bằng class "closed" */
-    section[data-testid="stSidebar"] {
-        transition: width 0.2s ease;
-    }
-
     /* Các phần còn lại giữ nguyên */
     .block-container {
         padding-top: 1.1rem;
@@ -292,7 +287,7 @@ def inject_css() -> None:
     <!-- NÚT HTML TRỰC TIẾP -->
     <div id="custom-toggle" title="Mở/đóng thanh bên">☰</div>
 
-    <!-- JAVASCRIPT: Toggle sidebar -->
+    <!-- JAVASCRIPT: Điều khiển sidebar trực tiếp -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         var toggleBtn = document.getElementById('custom-toggle');
@@ -300,7 +295,30 @@ def inject_css() -> None:
             toggleBtn.addEventListener('click', function() {
                 var sidebar = document.querySelector('section[data-testid="stSidebar"]');
                 if (sidebar) {
-                    sidebar.classList.toggle('closed');
+                    // Kiểm tra trạng thái hiện tại: nếu đang ẩn (width = 0 hoặc display = none) thì hiện, ngược lại ẩn
+                    var style = window.getComputedStyle(sidebar);
+                    var isHidden = (style.width === '0px' || style.width === '0rem' || style.display === 'none');
+                    if (isHidden) {
+                        // Mở sidebar
+                        sidebar.style.width = '21rem';
+                        sidebar.style.display = 'block';
+                        sidebar.style.transform = 'translateX(0)';
+                        sidebar.style.opacity = '1';
+                        sidebar.style.visibility = 'visible';
+                        // Cũng xóa class 'closed' nếu có
+                        sidebar.classList.remove('closed');
+                    } else {
+                        // Đóng sidebar
+                        sidebar.style.width = '0px';
+                        sidebar.style.display = 'none';
+                        sidebar.style.transform = 'translateX(-100%)';
+                        sidebar.style.opacity = '0';
+                        sidebar.style.visibility = 'hidden';
+                        // Thêm class 'closed' để Streamlit biết
+                        sidebar.classList.add('closed');
+                    }
+                } else {
+                    alert('Không tìm thấy sidebar!');
                 }
             });
         }
