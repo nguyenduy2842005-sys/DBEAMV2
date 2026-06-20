@@ -576,14 +576,32 @@ def render_continuous_beam() -> None:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
-                fig_el = base_figure("Elastic Curve", total_L_plot, "Deflection (visual)")
+                # 1. Lấy phôi đồ họa đã vẽ sẵn thanh dầm và gối tựa chuẩn không bị cắt chân
+                fig_el = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds)
+                fig_el.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}})
+
+                # 2. Xóa bỏ các ký hiệu mũi tên hoặc text tải trọng để tránh rối mắt trên biểu đồ võng
+                fig_el.layout.annotations = tuple()
+
+                # 3. Tính toán và vẽ đường cong võng
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
                 y_vis = -result_cb.deflection * (0.72 / mw)
-                fig_el.add_trace(go.Scatter(x=result_cb.x_global, y=y_vis, mode="lines", line={"color": COLOR_ELAST, "width": 3}, hovertemplate="x=%{x:.3f}m  w/EI=%{customdata:.5f}<extra></extra>", customdata=result_cb.deflection))
+
+                fig_el.add_trace(go.Scatter(
+                    x=result_cb.x_global, y=y_vis, mode="lines",
+                    line={"color": COLOR_ELAST, "width": 3},
+                    hovertemplate="x=%{x:.3f}m  w/EI=%{customdata:.5f}<extra></extra>",
+                    customdata=result_cb.deflection
+                ))
+
+                # 4. Đảm bảo giữ nguyên khung hiển thị rộng rãi bên dưới
+                fig_el.update_yaxes(range=[-1.2, 1.05], showticklabels=True, title="Deflection (visual)")
                 st.plotly_chart(fig_el, use_container_width=True)
             else:
-                st.plotly_chart(base_figure("Elastic Curve", total_L_plot, "Deflection"), use_container_width=True)
-
+                # Nếu chưa bấm Solve, hiển thị dầm liên tục trống với hệ trục tọa độ chuẩn
+                fig_empty = base_figure("Elastic Curve", total_L_plot, "Deflection")
+                fig_empty.update_yaxes(range=[-1.2, 1.05])
+                st.plotly_chart(fig_empty, use_container_width=True)
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
