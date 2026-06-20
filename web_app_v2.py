@@ -277,6 +277,8 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
     python-docx (ví dụ quên cập nhật requirements.txt), người dùng web VẪN
     luôn tải được file .docx hợp lệ — không bao giờ thấy lỗi "hãy tự cài thư viện".
     """
+
+
     def esc(s: str) -> str:
         return _xml_escape(s).replace("\t", "    ")
 
@@ -337,7 +339,59 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
     return buf.getvalue()
 
 
-def report_panel(report_text: str | None, report_title: str, key_prefix: str) -> None:
+def docx_with_images(
+    report_text: str,
+    report_title: str,
+    figures: list[tuple[str, go.Figure]]
+) -> bytes:
+
+    from docx import Document
+    from docx.shared import Inches
+
+    doc = Document()
+
+    doc.add_heading(report_title, level=1)
+
+    for line in report_text.split("\n"):
+        doc.add_paragraph(line)
+
+    if figures:
+        doc.add_page_break()
+        doc.add_heading("Biểu đồ kết quả", level=1)
+
+        for name, fig in figures:
+
+            doc.add_heading(name, level=2)
+
+            img = io.BytesIO()
+
+            fig.write_image(
+                img,
+                format="png",
+                width=900,
+                height=500,
+                scale=2
+            )
+
+            img.seek(0)
+
+            doc.add_picture(
+                img,
+                width=Inches(6.5)
+            )
+
+    out = io.BytesIO()
+    doc.save(out)
+
+    return out.getvalue()
+
+
+def report_panel(
+    report_text: str | None,
+    report_title: str,
+    key_prefix: str,
+    figures=None
+) -> None:
     st.subheader("📋 Thuyết minh tính toán")
     if not report_text:
         st.info("Chưa có kết quả. Nhấn **▶ Solve** để tính toán và xem thuyết minh.")
@@ -359,7 +413,18 @@ def report_panel(report_text: str | None, report_title: str, key_prefix: str) ->
         )
     with c2:
         try:
-            docx_bytes = build_docx_bytes(report_text, report_title)
+            if figures:
+                docx_bytes = docx_with_images(
+                    report_text,
+                    report_title,
+                    figures
+                )
+            else:
+                docx_bytes = build_docx_bytes(
+                    report_text,
+                    report_title
+                )
+
             st.download_button(
                 "⬇️ Xuất .docx",
                 data=docx_bytes,
@@ -368,11 +433,15 @@ def report_panel(report_text: str | None, report_title: str, key_prefix: str) ->
                 use_container_width=True,
                 key=f"{key_prefix}_dl_docx",
             )
+
+        except Exception as e:
+            st.error(f"Lỗi xuất DOCX: {e}")
         except ImportError:
-            # Fallback: vẫn cho người dùng tải .docx được ngay (không cần cài gì),
-            # dùng writer .docx tối giản viết thủ công bằng XML chuẩn OOXML —
-            # không phụ thuộc thư viện python-docx.
-            docx_bytes = _minimal_docx_bytes(report_text, report_title)
+            docx_bytes = _minimal_docx_bytes(
+                report_text,
+                report_title
+            )
+
             st.download_button(
                 "⬇️ Xuất .docx",
                 data=docx_bytes,
@@ -381,6 +450,9 @@ def report_panel(report_text: str | None, report_title: str, key_prefix: str) ->
                 use_container_width=True,
                 key=f"{key_prefix}_dl_docx",
             )
+
+        except Exception as e:
+            st.error(f"Lỗi xuất DOCX: {e}")
 
 
 # ══════════════════════════════════════════════════════
