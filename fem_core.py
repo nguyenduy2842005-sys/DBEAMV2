@@ -160,7 +160,7 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
         f += q * hermite(xi) * L_elem * w
     return f
 
-    def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> ContinuousBeamResult:
+def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> ContinuousBeamResult:
         """Assemble global stiffness, apply BCs, solve, recover diagrams."""
 
         spans = data.spans
@@ -880,24 +880,3 @@ def build_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toán")
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
-def build_docx_bytes(text: str, title: str = "Report"):
-    try:
-        from docx import Document
-    except ImportError:
-        raise ImportError(
-            "Cần cài python-docx: pip install python-docx"
-        )
-
-    doc = Document()
-
-    doc.add_heading(title, level=1)
-
-    for line in text.split("\n"):
-        doc.add_paragraph(line)
-
-    buffer = io.BytesIO()
-    doc.save(buffer)
-
-    buffer.seek(0)
-
-    return buffer.getvalue()
