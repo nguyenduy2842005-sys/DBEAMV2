@@ -215,42 +215,26 @@ def inject_css() -> None:
         display: none !important;
     }
 
-    /* === HIỂN THỊ NÚT MỞ SIDEBAR === */
+    /* === LUÔN HIỂN THỊ NÚT MỞ SIDEBAR === */
     [data-testid="collapsedControl"] {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
-        position: fixed !important;
-        left: 0.5rem !important;
-        top: 0.75rem !important;
-        z-index: 99999 !important; /* cao hơn các lớp khác */
         color: var(--text-color) !important;
         font-size: 1.5rem !important;
         cursor: pointer !important;
+        margin-right: 0.5rem !important;
+        /* Đảm bảo không bị ẩn bởi header */
+        z-index: 99999 !important;
+        position: relative !important;
     }
 
-    /* Đảm bảo header không che nút */
+    /* Đảm bảo header hiển thị để chứa nút */
     header {
         display: flex !important;
         background: transparent !important;
-        position: relative !important;
         z-index: 9999 !important;
-    }
-
-    /* === ĐẢM BẢO SIDEBAR HOẠT ĐỘNG ĐÚNG === */
-    section[data-testid="stSidebar"] {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: 21rem !important;
-        transform: translateX(0) !important;
-        transition: none !important; /* tránh hiệu ứng làm mờ */
-    }
-
-    /* Khi sidebar ở trạng thái thu gọn, vẫn giữ khả năng mở */
-    .st-emotion-cache-1r6slb0 {
-        display: block !important;
     }
 
     /* Các phần còn lại giữ nguyên */
@@ -296,6 +280,42 @@ def inject_css() -> None:
         font-family: Consolas, "Courier New", monospace !important;
     }
     </style>
+
+    <!-- JavaScript đơn giản: nếu nút collapse biến mất, tạo lại -->
+    <script>
+    (function() {
+        function ensureCollapseButton() {
+            // Nếu nút chưa tồn tại, tạo một cái mới và đặt vào header
+            if (!document.querySelector('[data-testid="collapsedControl"]')) {
+                const header = document.querySelector('header');
+                if (header) {
+                    const btn = document.createElement('div');
+                    btn.setAttribute('data-testid', 'collapsedControl');
+                    btn.style.cssText = 'display:flex; align-items:center; cursor:pointer; font-size:1.8rem; padding:0 10px; color:var(--text-color);';
+                    btn.innerHTML = '☰';
+                    // Khi click, tìm sidebar và thực hiện toggle (dùng Streamlit's built-in behavior)
+                    btn.onclick = function() {
+                        // Tìm sidebar và chuyển đổi class 'closed' (Streamlit sử dụng class)
+                        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+                        if (sidebar) {
+                            // Nếu sidebar có class 'closed' (thu gọn) thì xóa nó đi, ngược lại thêm vào
+                            if (sidebar.classList.contains('closed')) {
+                                sidebar.classList.remove('closed');
+                            } else {
+                                sidebar.classList.add('closed');
+                            }
+                        }
+                    };
+                    header.insertBefore(btn, header.firstChild);
+                }
+            }
+        }
+        // Chạy khi DOM load và mỗi khi Streamlit rerender
+        document.addEventListener('DOMContentLoaded', ensureCollapseButton);
+        new MutationObserver(ensureCollapseButton).observe(document.body, { childList: true, subtree: true });
+        setTimeout(ensureCollapseButton, 500);
+    })();
+    </script>
     """, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════
 #  SHARED HELPERS
