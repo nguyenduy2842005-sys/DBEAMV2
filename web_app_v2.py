@@ -608,21 +608,30 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
     """Hàm bổ trợ chuyên biệt: Chỉ vẽ trục dầm và các gối đỡ, nới rộng khung để không bao giờ mất chân"""
     fig = base_figure("Dầm liên tục", total_L)
 
-    # SỬA/THÊM TẠI ĐÂY: Nới cấu hình lề dưới layout để chừa không gian hiển thị chân gối & nhãn N0, N1
+    # 1. Đặt khoảng trống lề dưới rộng rãi
     fig.update_layout(
-        margin=dict(l=55, r=20, t=60, b=80),  # Tăng b từ 45 lên 80
+        margin=dict(l=55, r=20, t=60, b=75),
     )
 
-    # Ép cố định trục Y, tắt autorange để Plotly không tự co cụm bóp nghẹt gối đỡ
+    # 2. KHẮC PHỤC TRIỆT ĐỂ: Ép cố định trục Y không cho phép tự co giãn theo dữ liệu (fixedrange=True)
+    # Cấu hình range xuống hẳn -1.6 để tạo một khoảng trống "bảo hiểm" cực rộng dưới mặt sàn y=-0.44
     fig.update_yaxes(
-        range=[-1.2, 1.05],
-        autorange=False,
+        range=[-1.6, 1.2],
+        fixedrange=True,
         showticklabels=False,
         title=""
     )
 
     # Vẽ thanh dầm chính màu xám
-    fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+    fig.add_trace(
+        go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+
+    # Nhãn tên nhịp dầm (L1, L2,...)
+    x_acc = 0.0
+    for i, Ls in enumerate(span_lengths):
+        mid = x_acc + Ls / 2
+        fig.add_annotation(x=mid, y=0.15, text=f"L{i + 1}={Ls:.1f}m", showarrow=False, font={"size": 10})
+        x_acc += Ls
 
     # Vẽ hệ thống gối đỡ chuẩn kích thước độc lập pixel
     node_xs = [0.0] + list(np.cumsum(span_lengths))
@@ -660,7 +669,9 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
             fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
                           fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
-        fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
+        # Đẩy nhãn N0, N1 lên y=-0.65 để nằm gọn gàng ngay dưới mặt sàn phẳng màu đỏ
+        fig.add_annotation(x=xp, y=-0.65, text=f"N{i}", showarrow=False, font={"size": 10, "color": COLOR_SUP})
+
     return fig
 
 
