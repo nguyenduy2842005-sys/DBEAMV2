@@ -215,32 +215,45 @@ def inject_css() -> None:
         display: none !important;
     }
 
-    /* NÚT TOGGLE SIDEBAR - LUÔN HIỂN THỊ */
+    /* ĐẢM BẢO SIDEBAR LUÔN CÓ KÍCH THƯỚC */
+    section[data-testid="stSidebar"] {
+        display: block !important;
+        width: 21rem !important;
+        transition: width 0.2s ease !important;
+        overflow: hidden !important;
+    }
+
+    /* NÚT TOGGLE */
     #custom-toggle {
         position: fixed;
         top: 12px;
         left: 12px;
         z-index: 999999;
         background: white;
-        border: 2px solid #e0e0e0;
-        font-size: 28px;
-        padding: 8px 14px;
+        border: 2px solid #ccc;
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        padding: 8px 14px;
+        font-size: 28px;
         cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         color: #333;
-        line-height: 1;
         transition: 0.2s;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
     }
     #custom-toggle:hover {
         background: #f0f0f0;
         transform: scale(1.05);
     }
 
-    /* Các phần còn lại giữ nguyên */
+    /* Khi sidebar đóng, thu nhỏ lại nhưng vẫn giữ nút */
+    .sidebar-closed section[data-testid="stSidebar"] {
+        width: 0px !important;
+        display: none !important;
+    }
+
+    /* Các style khác giữ nguyên */
     .block-container {
         padding-top: 1.1rem;
         padding-bottom: 1.5rem;
@@ -284,45 +297,53 @@ def inject_css() -> None:
     }
     </style>
 
-    <!-- NÚT HTML TRỰC TIẾP -->
-    <div id="custom-toggle" title="Mở/đóng thanh bên">☰</div>
+    <!-- NÚT HTML -->
+    <div id="custom-toggle" title="Mở/đóng sidebar">☰</div>
 
-    <!-- JAVASCRIPT: Điều khiển sidebar trực tiếp -->
+    <!-- JAVASCRIPT TOGGLE SIDEBAR -->
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var toggleBtn = document.getElementById('custom-toggle');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                var sidebar = document.querySelector('section[data-testid="stSidebar"]');
-                if (sidebar) {
-                    // Kiểm tra trạng thái hiện tại: nếu đang ẩn (width = 0 hoặc display = none) thì hiện, ngược lại ẩn
-                    var style = window.getComputedStyle(sidebar);
-                    var isHidden = (style.width === '0px' || style.width === '0rem' || style.display === 'none');
-                    if (isHidden) {
-                        // Mở sidebar
-                        sidebar.style.width = '21rem';
-                        sidebar.style.display = 'block';
-                        sidebar.style.transform = 'translateX(0)';
-                        sidebar.style.opacity = '1';
-                        sidebar.style.visibility = 'visible';
-                        // Cũng xóa class 'closed' nếu có
-                        sidebar.classList.remove('closed');
-                    } else {
-                        // Đóng sidebar
-                        sidebar.style.width = '0px';
-                        sidebar.style.display = 'none';
-                        sidebar.style.transform = 'translateX(-100%)';
-                        sidebar.style.opacity = '0';
-                        sidebar.style.visibility = 'hidden';
-                        // Thêm class 'closed' để Streamlit biết
-                        sidebar.classList.add('closed');
-                    }
-                } else {
-                    alert('Không tìm thấy sidebar!');
-                }
-            });
+    (function() {
+        function toggleSidebar() {
+            const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+            if (!sidebar) return;
+
+            // Kiểm tra nếu sidebar đang ẩn (width=0 hoặc display=none)
+            const isHidden = sidebar.style.width === '0px' || 
+                             sidebar.style.width === '0rem' || 
+                             sidebar.style.display === 'none' ||
+                             sidebar.classList.contains('closed');
+
+            if (isHidden) {
+                // Mở sidebar
+                sidebar.style.display = 'block';
+                sidebar.style.width = '21rem';
+                sidebar.classList.remove('closed');
+                // Nếu body có class sidebar-closed thì xóa
+                document.body.classList.remove('sidebar-closed');
+            } else {
+                // Đóng sidebar
+                sidebar.style.width = '0px';
+                sidebar.style.display = 'none';
+                sidebar.classList.add('closed');
+                document.body.classList.add('sidebar-closed');
+            }
         }
-    });
+
+        // Gán sự kiện cho nút toggle
+        const toggleBtn = document.getElementById('custom-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', toggleSidebar);
+        }
+
+        // Đảm bảo sidebar luôn mở khi load (trừ khi có class closed mặc định)
+        window.addEventListener('load', function() {
+            const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+            if (sidebar && !sidebar.classList.contains('closed')) {
+                sidebar.style.display = 'block';
+                sidebar.style.width = '21rem';
+            }
+        });
+    })();
     </script>
     """, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════
