@@ -375,19 +375,19 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
 
 def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
     """
-    Fallback dùng Matplotlib, vẽ lại tất cả trace, annotation, shape.
-    Cố gắng tái tạo giống nhất có thể (không cần Chrome).
+    Fallback dùng Matplotlib, vẽ lại tất cả trace (đường, fill, marker),
+    annotation (text, mũi tên đúng chiều) và shape.
+    Không cần Chrome/kaleido.
     """
     try:
         import matplotlib.pyplot as plt
         import matplotlib.patches as patches
-        from matplotlib.path import Path
         import io
         import numpy as np
 
         plt.figure(figsize=(8, 4.5))
 
-        # 1. Vẽ các trace (đường, fill)
+        # 1. Vẽ các trace (lines, markers, fills)
         for tr in fig.data:
             if hasattr(tr, 'x') and hasattr(tr, 'y') and tr.x is not None and tr.y is not None:
                 try:
@@ -396,8 +396,18 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                     color = tr.line.color if hasattr(tr, 'line') and tr.line else '#0000ff'
                     linewidth = tr.line.width if hasattr(tr, 'line') and tr.line else 1.5
 
-                    plt.plot(x, y, color=color, linewidth=linewidth)
+                    # Vẽ đường nếu có 'lines' trong mode
+                    mode = tr.mode if hasattr(tr, 'mode') else 'lines'
+                    if 'lines' in mode:
+                        plt.plot(x, y, color=color, linewidth=linewidth)
 
+                    # Vẽ marker nếu có 'markers' trong mode
+                    if 'markers' in mode:
+                        marker_size = tr.marker.size if hasattr(tr, 'marker') and tr.marker else 7
+                        marker_color = tr.marker.color if hasattr(tr, 'marker') and tr.marker else color
+                        plt.scatter(x, y, s=marker_size**2, color=marker_color, edgecolors='black', linewidth=0.5)
+
+                    # Fill nếu có fill
                     if hasattr(tr, 'fill') and tr.fill == 'tozeroy':
                         plt.fill_between(x, y, 0, color=color, alpha=0.2)
                     elif hasattr(tr, 'fill') and tr.fill == 'toself':
@@ -405,7 +415,7 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                 except Exception:
                     pass
 
-        # 2. Vẽ các shape (ví dụ: ngàm, tam giác gối)
+        # 2. Vẽ các shape (ngàm, tam giác gối, v.v.)
         if fig.layout.shapes:
             for sh in fig.layout.shapes:
                 try:
@@ -424,11 +434,11 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                 except Exception:
                     pass
 
-        # 3. Vẽ các annotation (mũi tên, text)
+        # 3. Vẽ các annotation (text, mũi tên)
         if fig.layout.annotations:
             for ann in fig.layout.annotations:
                 try:
-                    # Text
+                    # Text (không có mũi tên)
                     if ann.text and not ann.showarrow:
                         x = ann.x if ann.x is not None else 0
                         y = ann.y if ann.y is not None else 0
@@ -437,16 +447,20 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                                  color=ann.font.color if ann.font else 'black',
                                  ha=ann.xanchor if ann.xanchor else 'center',
                                  va=ann.yanchor if ann.yanchor else 'center')
-                    # Arrow
+
+                    # Arrow (mũi tên)
                     if ann.showarrow:
-                        x0 = ann.x if ann.x is not None else 0
-                        y0 = ann.y if ann.y is not None else 0
-                        x1 = ann.ax if ann.ax is not None else 0
-                        y1 = ann.ay if ann.ay is not None else 0
-                        plt.annotate('', xy=(x1, y1), xytext=(x0, y0),
+                        # Plotly: x,y là điểm ngọn (head), ax,ay là điểm gốc (tail)
+                        x_start = ann.ax if ann.ax is not None else 0
+                        y_start = ann.ay if ann.ay is not None else 0
+                        x_end = ann.x if ann.x is not None else 0
+                        y_end = ann.y if ann.y is not None else 0
+
+                        # Dùng plt.annotate để vẽ mũi tên từ start đến end
+                        plt.annotate('', xy=(x_end, y_end), xytext=(x_start, y_start),
                                      arrowprops=dict(arrowstyle='->',
                                                      color=ann.arrowcolor if ann.arrowcolor else 'black',
-                                                     lw=ann.arrowwidth if ann.arrowwidth else 1))
+                                                     lw=ann.arrowwidth if ann.arrowwidth else 1.5))
                 except Exception:
                     pass
 
@@ -464,6 +478,9 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
             plt.xlim(fig.layout.xaxis.range)
         if fig.layout.yaxis and fig.layout.yaxis.range:
             plt.ylim(fig.layout.yaxis.range)
+
+        # Đảm bảo tỉ lệ bằng nhau nếu cần (tuỳ chỉnh)
+        # plt.gca().set_aspect('equal')  # có thể bỏ comment nếu muốn
 
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
