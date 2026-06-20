@@ -576,14 +576,11 @@ def render_continuous_beam() -> None:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
-                # 1. Lấy phôi đồ họa đã vẽ sẵn thanh dầm và gối tựa chuẩn không bị cắt chân
-                fig_el = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds)
+                # Gọi hàm dựng khung dầm nền nguyên bản (Tuyệt đối KHÔNG có tải trọng)
+                fig_el = _cb_draw_base_beam_and_supports(total_L_plot, span_lengths, support_kinds)
                 fig_el.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}})
 
-                # 2. Xóa bỏ các ký hiệu mũi tên hoặc text tải trọng để tránh rối mắt trên biểu đồ võng
-                fig_el.layout.annotations = tuple()
-
-                # 3. Tính toán và vẽ đường cong võng
+                # Tính toán và vẽ đường cong võng đè lên dầm nền
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
                 y_vis = -result_cb.deflection * (0.72 / mw)
 
@@ -594,94 +591,111 @@ def render_continuous_beam() -> None:
                     customdata=result_cb.deflection
                 ))
 
-                # 4. Đảm bảo giữ nguyên khung hiển thị rộng rãi bên dưới
-                fig_el.update_yaxes(range=[-1.2, 1.05], showticklabels=True, title="Deflection (visual)")
+                # Giữ nguyên tỷ lệ nới rộng hệ trục và mở nhãn số liệu chuyển vị
+                fig_el.update_yaxes(range=[-1.35, 1.05], showticklabels=True, title="Deflection (visual)")
                 st.plotly_chart(fig_el, use_container_width=True)
             else:
-                # Nếu chưa bấm Solve, hiển thị dầm liên tục trống với hệ trục tọa độ chuẩn
+                # Khi chưa bấm giải tính
                 fig_empty = base_figure("Elastic Curve", total_L_plot, "Deflection")
-                fig_empty.update_yaxes(range=[-1.2, 1.05])
+                fig_empty.update_yaxes(range=[-1.35, 1.05])
                 st.plotly_chart(fig_empty, use_container_width=True)
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
 
+def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.Figure:
+    """Hàm bổ trợ chuyên biệt: Chỉ vẽ trục dầm và các gối đỡ, nới rộng khung để không bao giờ mất chân"""
+    fig = base_figure("Dầm liên tục", total_L)
+
+    # Nới rộng hẳn range trục Y xuống -1.35 để đảm bảo chân gối không bị cắt trên mọi màn hình
+    fig.update_yaxes(range=[-1.35, 1.05], showticklabels=False, title="")
+
+    # Vẽ thanh dầm chính màu xám
+    fig.add_trace(
+        go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+
+    # Vẽ hệ thống gối đỡ chuẩn kích thước độc lập pixel
+    node_xs = [0.0] + list(np.cumsum(span_lengths))
+    for i, kind in enumerate(support_kinds):
+        xp = node_xs[i]
+        if kind == "pin":
+            fig.add_trace(go.Scatter(
+                x=[xp, xp + total_L / 34, xp - total_L / 34, xp], y=[0, -0.37, -0.37, 0],
+                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5},
+                fillcolor=COLOR_SUP, hoverinfo="skip"
+            ))
+        elif kind == "roller":
+            y_top = -0.08
+            y_bot = -0.36
+            y_floor = -0.44
+            fig.add_trace(go.Scatter(
+                x=[xp], y=[y_top], mode="markers",
+                marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+                hoverinfo="skip"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[xp], y=[y_bot], mode="markers",
+                marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
+                hoverinfo="skip"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[xp, xp], y=[y_top, y_bot], mode="lines",
+                line=dict(color=COLOR_SUP, width=1.5), hoverinfo="skip"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[xp - total_L / 34, xp + total_L / 34], y=[y_floor, y_floor], mode="lines",
+                line=dict(color=COLOR_SUP, width=2), hoverinfo="skip"
+            ))
+        elif kind == "fixed":
+            fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
+                          fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
+
+        fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
+    return fig
+
+
 def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -> go.Figure:
     total_L = sum(span_lengths)
-    fig = base_figure("Load Diagram — Dầm liên tục", total_L)
-    fig.update_yaxes(range=[-1.2, 1.05], showticklabels=False, title="")
+    # Lấy khung dầm và gối đỡ nền
+    fig = _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds)
+    fig.update_layout(title={"text": "<b>Load Diagram — Dầm liên tục</b>", "x": 0.5})
 
-    # Trục dầm chính
-    fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+    # --- CHỈ VẼ TẢI TRỌNG TRÊN BIỂU ĐỒ NÀY ---
+    node_xs = [0.0] + list(np.cumsum(span_lengths))
 
-    # Nhãn nhịp
-    x_acc = 0.0
-    for i, Ls in enumerate(span_lengths):
-        mid = x_acc + Ls / 2
-        fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10})
-        x_acc += Ls
+    # 1. Vẽ tải trọng phân bố đều UDL
+    for i, q in enumerate(span_udl):
+        if abs(q) > 1e-5:
+            x0 = node_xs[i]
+            x1 = node_xs[i + 1]
+            sign = 1.0 if q > 0 else -1.0
+            y_val = sign * 0.45
+            fig.add_trace(go.Scatter(
+                x=[x0, x1, x1, x0, x0], y=[0, 0, y_val, y_val, 0],
+                fill="toself", fillcolor="rgba(40,167,69,0.12)",
+                line={"color": "#28a745", "width": 1},
+                name=f"S{i} UDL", hovertemplate=f"UDL: {q:.2f} kN/m<extra></extra>"
+            ))
+            fig.add_annotation(x=(x0 + x1) / 2, y=y_val + sign * 0.12, text=f"{q:.1f}kN/m", showarrow=False,
+                               font={"size": 10, "color": "#28a745"})
 
-        # VẼ GỐI ĐỠ PIN & ROLLER CHUẨN ĐẸP KHÔNG BỊ MÉO
-        node_xs = [0.0] + list(np.cumsum(span_lengths))
-        for i, kind in enumerate(support_kinds):
-            xp = node_xs[i]
-            if kind == "pin":
-                # Gối cố định: Hình tam giác màu đỏ
-                fig.add_trace(go.Scatter(
-                    x=[xp, xp + total_L / 34, xp - total_L / 34, xp], y=[0, -0.37, -0.37, 0],
-                    fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5},
-                    fillcolor=COLOR_SUP, hoverinfo="skip"
-                ))
-            elif kind == "roller":
-                # Gối di động: Dịch chuyển xuống dưới để không đè lên dầm và nối khít sàn phẳng
-                y_top = -0.08  # Điểm chấm trên: Đẩy xuống dưới mép dầm một chút
-                y_bot = -0.36  # Điểm chấm dưới
-                y_floor = -0.44  # Mặt sàn ngang: Kéo dịch xuống để tạo khoảng cách thoáng đẹp
+    # 2. Vẽ tải trọng tập trung Point Load
+    for i, pl_list in enumerate(span_pl):
+        x_start = node_xs[i]
+        for (P, x_loc) in pl_list:
+            if abs(P) > 1e-5:
+                xp = x_start + x_loc
+                sign = 1.0 if P > 0 else -1.0
+                y_arr_start = sign * 0.55
+                y_arr_end = sign * 0.05
+                fig.add_annotation(
+                    x=xp, y=y_arr_end, ax=xp, ay=y_arr_start,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#28a745"
+                )
+                fig.add_annotation(x=xp, y=y_arr_start + sign * 0.12, text=f"{P:.1f}kN", showarrow=False,
+                                   font={"size": 10, "color": "#28a745"})
 
-                # Điểm chấm 1 (Phía trên - sát dưới dầm)
-                fig.add_trace(go.Scatter(
-                    x=[xp], y=[y_top], mode="markers",
-                    marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
-                    hoverinfo="skip"
-                ))
-                # Điểm chấm 2 (Phía dưới - sát mặt sàn)
-                fig.add_trace(go.Scatter(
-                    x=[xp], y=[y_bot], mode="markers",
-                    marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
-                    hoverinfo="skip"
-                ))
-                # Thanh thẳng đứng nối xuyên suốt và khít từ điểm trên xuống điểm dưới
-                fig.add_trace(go.Scatter(
-                    x=[xp, xp], y=[y_top, y_bot], mode="lines",
-                    line=dict(color=COLOR_SUP, width=1.5),
-                    hoverinfo="skip"
-                ))
-                # Mặt sàn phẳng ngang nằm khít ngay dưới chân điểm chấm số 2
-                fig.add_trace(go.Scatter(
-                    x=[xp - total_L / 34, xp + total_L / 34], y=[y_floor, y_floor], mode="lines",
-                    line=dict(color=COLOR_SUP, width=2),
-                    hoverinfo="skip"
-                ))
-            elif kind == "fixed":
-                fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
-                              fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
-
-            fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
-
-    # Tải trọng
-    x_acc = 0.0
-    for s_idx, Ls in enumerate(span_lengths):
-        for P, xl in span_pl[s_idx]:
-            xp = x_acc + xl
-            yp, yt = (-0.06, -0.74) if P > 0 else (0.06, 0.74)
-            fig.add_annotation(x=xp, y=yp, ax=xp, ay=yt, xref="x", yref="y", axref="x", ayref="y", showarrow=True, arrowhead=3, arrowsize=1.0, arrowwidth=2, arrowcolor=COLOR_SFD, text="")
-            fig.add_annotation(x=xp, y=yt*1.05, text=f"{P:g}kN", showarrow=False, font={"size": 10, "color": COLOR_SFD})
-        for q, x1, x2 in span_udl[s_idx]:
-            xg1, xg2 = x_acc + x1, x_acc + x2
-            yb = -0.58 if q > 0 else 0.58
-            fig.add_trace(go.Scatter(x=[xg1, xg2, xg2, xg1, xg1], y=[0, 0, yb, yb, 0], fill="toself", mode="lines", line={"color": "#168f2c", "width": 1}, fillcolor="rgba(22,143,44,0.16)", hovertemplate=f"UDL: {q:g}kN/m<extra></extra>"))
-            fig.add_annotation(x=(xg1+xg2)/2, y=yb*1.12, text=f"{q:g}kN/m", showarrow=False, font={"size": 10, "color": "#168f2c"})
-        x_acc += Ls
     return fig
 
 
