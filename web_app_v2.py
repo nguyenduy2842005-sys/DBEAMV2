@@ -451,8 +451,8 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
         nx = -ty
         ny = tx
 
-        arrow_len = l * 0.08
-        arrow_w = l * 0.035
+        arrow_len = l * 0.045
+        arrow_w = l * 0.012
 
         p1 = (
             xe,
@@ -1232,8 +1232,8 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
 
                 # đầu tam giác mũi tên moment
 
-                arrow_len = total_L * 0.08
-                arrow_w = total_L * 0.035
+                arrow_len = total_L * 0.045
+                arrow_w = total_L * 0.012
 
                 nx = -ty
                 ny = tx
