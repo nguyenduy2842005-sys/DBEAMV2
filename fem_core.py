@@ -355,7 +355,6 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
             # Công thức hiệu chỉnh để khớp giải tích:
             V_val = V_fem + q_local * (Le / 2 - x_local)
             M_val = M_fem + (q_local * x_local * (Le - x_local)) / 2
-
             x_out_list.append(x)
             V_list.append(V_val)
             M_list.append(M_val)
