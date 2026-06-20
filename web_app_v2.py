@@ -201,12 +201,26 @@ def single_synced_plot(title, length, y_title=""):
 #  PAGE CONFIG & ADAPTIVE CSS
 # ══════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Beam Analysis Suite",
+    page_title="Beam Analysis ",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
+import streamlit as st
 
+# Khởi tạo trạng thái nếu chưa có
+if "show_sidebar" not in st.session_state:
+    st.session_state.show_sidebar = True
+
+# Nút bấm nằm ở TRANG CHÍNH (để luôn luôn nhìn thấy)
+if st.button("Đóng/Mở Sidebar"):
+    st.session_state.show_sidebar = not st.session_state.show_sidebar
+
+# Kiểm tra điều kiện để hiển thị Sidebar
+if st.session_state.show_sidebar:
+    with st.sidebar:
+        st.write("--- DANH MỤC ĐIỀU KHIỂN ---")
+        # Các input của bạn ở đây...
 def inject_css() -> None:
     st.markdown("""
     <style>
