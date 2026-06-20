@@ -160,17 +160,15 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
         f += q * hermite(xi) * L_elem * w
     return f
 
-
     def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> ContinuousBeamResult:
-    """"Assemble global stiffness, apply BCs, solve, recover diagrams."""
+        """Assemble global stiffness, apply BCs, solve, recover diagrams."""
 
-    spans = data.spans
-    n_spans = len(spans)
-    total_L = sum(s.length for s in spans)
+        spans = data.spans
+        n_spans = len(spans)
+        total_L = sum(s.length for s in spans)
 
-    # Node positions (span interfaces)
-    node_x = np.concatenate([[0.0], np.cumsum([s.length for s in spans])])
-    n_nodes = len(node_x)  # n_spans + 1
+        # Node positions (span interfaces)
+        node_x = np.concatenate([[0.0], np.cumsum([s.length for s in spans])])
 
     # ── Mesh: subdivide each span into n_elem elements ──
     mesh_elems = []   # list of (EI, L_local, span_idx, x_start_global)
@@ -392,7 +390,69 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
         reactions=reactions,
         report=report,
     )
+    # --- 5. Diagram Recovery (Walking along the beam - Method of Sections) ---
+    # Thu thập các điểm tới hạn để biểu đồ nhảy chính xác
+    critical_x = [0.0, total_L]
+    for sup in data.supports: critical_x.append(node_x[sup.node])
+    for s_idx, span in enumerate(spans):
+        x0 = node_x[s_idx]
+        for P, xl in span.point_loads: critical_x.append(x0 + xl)
+        for M, xl in span.point_moments: critical_x.append(x0 + xl)
+        for q, x1, x2 in span.udls: critical_x.extend([x0 + x1, x0 + x2])
 
+    # Tạo mảng x mịn và sắp xếp các điểm tới hạn
+    dense_x = np.linspace(0, total_L, pts_per_elem * n_spans + 1)
+    x_arr = np.sort(np.unique(np.concatenate([critical_x, dense_x])))
+
+    V_arr, M_arr, w_arr, th_arr = [], [], [], []
+
+    for x in x_arr:
+        # Tính V và M bằng phương pháp cân bằng (Equilibrium)
+        v_sum = 0.0
+        m_sum = 0.0
+        # Phản lực bên trái
+        for s_idx, r in reactions.items():
+            if r["x_pos"] < x - 1e-9:
+                v_sum += r["Fy"]
+                m_sum += r["Fy"] * (x - r["x_pos"]) + r["Mz"]
+
+        # Tải trọng bên trái
+        for s_idx, span in enumerate(spans):
+            x0 = node_x[s_idx]
+            if x0 >= x + 1e-9: continue
+            for P, xl in span.point_loads:
+                if (x0 + xl) < x - 1e-9:
+                    v_sum -= P
+                    m_sum -= P * (x - (x0 + xl))
+            for M, xl in span.point_moments:
+                if (x0 + xl) < x - 1e-9:
+                    m_sum -= M
+            for q, x1, x2 in span.udls:
+                a, b = x0 + x1, min(x, x0 + x2)
+                if b > a + 1e-9:
+                    load = q * (b - a)
+                    v_sum -= load
+                    m_sum -= load * (x - (a + b) / 2)
+
+        V_arr.append(v_sum)
+        M_arr.append(m_sum)
+
+        # Tính độ võng (w) và góc xoay (th) từ hàm dạng FEM
+        # Tìm phần tử chứa x
+        for i, e_data in enumerate(mesh_elems):
+            if e_data["x0_global"] <= x <= e_data["x0_global"] + e_data["L"] + 1e-9:
+                xi = (x - e_data["x0_global"]) / e_data["L"]
+                xi = max(0, min(1, xi))
+                Le = e_data["L"]
+                N = np.array([1 - 3 * xi ** 2 + 2 * xi ** 3, Le * xi * (1 - xi) ** 2, 3 * xi ** 2 - 2 * xi ** 3,
+                              Le * xi ** 2 * (xi - 1)])
+                dN = np.array([(-6 * xi + 6 * xi ** 2) / Le, 1 - 4 * xi + 3 * xi ** 2, (6 * xi - 6 * xi ** 2) / Le,
+                               -2 * xi + 3 * xi ** 2])
+                ni, nj = elem_nodes[i]
+                u_e = U[[2 * ni, 2 * ni + 1, 2 * nj, 2 * nj + 1]]
+                w_arr.append(float(N @ u_e))
+                th_arr.append(float(dN @ u_e))
+                break
 
 def _build_cb_report(data, reactions, x_arr, V_arr, M_arr, w_arr, span_node_map, n_gnodes, mesh_elems) -> str:
     lines = []

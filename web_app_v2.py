@@ -26,8 +26,8 @@ from fem_core import (
     FrameNode, FrameElement, FrameSupport, FramePointLoad,
     PlaneFrameInput, PlaneFrameResult, FrameElementResult,
     solve_plane_frame,
-    build_docx_bytes,
-)
+    build_docx_bytes,)
+
 
 # ══════════════════════════════════════════════════════
 #  GLOBAL CONSTANTS
@@ -107,8 +107,60 @@ def clean_rows(df: pd.DataFrame, columns: Iterable[str]) -> list[tuple[float, ..
         if not skip:
             rows.append(tuple(values))
     return rows
+def add_jump_points(x, y, jump_x):
+
+    x_new = []
+    y_new = []
+
+    for i in range(len(x)-1):
+
+        x_new.append(x[i])
+        y_new.append(y[i])
+
+        for j in jump_x:
+
+            if x[i] < j < x[i+1]:
+
+                # trước tải
+                x_new.append(j-1e-6)
+                y_new.append(y[i])
+
+                # sau tải
+                x_new.append(j+1e-6)
+                y_new.append(y[i+1])
 
 
+    x_new.append(x[-1])
+    y_new.append(y[-1])
+
+    return np.array(x_new), np.array(y_new)
+def add_moment_jump_points(x, y, jump_x):
+
+    x_new = []
+    y_new = []
+
+    for i in range(len(x)-1):
+
+        x_new.append(x[i])
+        y_new.append(y[i])
+
+        for j in jump_x:
+
+            if x[i] < j < x[i+1]:
+
+                # trước moment
+                x_new.append(j-1e-6)
+                y_new.append(y[i])
+
+                # sau moment
+                x_new.append(j+1e-6)
+                y_new.append(y[i+1])
+
+
+    x_new.append(x[-1])
+    y_new.append(y[-1])
+
+    return np.array(x_new), np.array(y_new)
 def base_figure(title: str, x_range: float, y_title: str = "") -> go.Figure:
     fig = go.Figure()
     fig.update_layout(
@@ -574,31 +626,105 @@ def render_continuous_beam() -> None:
             st.plotly_chart(fig_load, use_container_width=True)
         with b:
             if result_cb:
-                fig_sfd = base_figure("Shear Force Diagram", total_L_plot, "V (kN)")
+
+                fig_sfd = base_figure(
+                    "Shear Force Diagram",
+                    total_L_plot,
+                    "V (kN)"
+                )
+
+                # ==============================
+                # Chèn điểm nhảy do Point Load
+                # ==============================
+
+                jump = []
+
+                x0 = 0.0
+
+                for i, sp in enumerate(span_pl):
+                    for P, xp in sp:
+                        jump.append(x0 + xp)
+
+                    x0 += span_lengths[i]
+
+                x_sfd, y_sfd = add_jump_points(
+                    result_cb.x_global,
+                    result_cb.shear,
+                    jump
+                )
+
                 fig_sfd.add_trace(go.Scatter(
-                    x=result_cb.x_global, y=result_cb.shear, mode="lines",
-                    fill="tozeroy", line={"color": COLOR_SFD, "width": 2},
+                    x=x_sfd,
+                    y=y_sfd,
+                    mode="lines",
+                    fill="tozeroy",
+                    line={
+                        "color": COLOR_SFD,
+                        "width": 2
+                    },
                     fillcolor="rgba(11,95,255,0.20)",
-                    hovertemplate="x=%{x:.3f}m  V=%{y:.3f}kN<extra></extra>"))
-                st.plotly_chart(fig_sfd, use_container_width=True)
-            else:
-                st.plotly_chart(base_figure("Shear Force Diagram", total_L_plot, "V (kN)"),
-                                use_container_width=True)
+                    hovertemplate=
+                    "x=%{x:.3f}m  V=%{y:.3f}kN<extra></extra>"
+                ))
+
+                st.plotly_chart(
+                    fig_sfd,
+                    use_container_width=True
+                )
 
         c, d = st.columns(2)
         with c:
             if result_cb:
-                fig_bmd = base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)")
+
+                fig_bmd = base_figure(
+                    "Bending Moment Diagram",
+                    total_L_plot,
+                    "M (kNm)"
+                )
+
+                # ============================
+                # Chèn điểm nhảy do Point Moment
+                # ============================
+
+                jump_m = []
+
+                x0 = 0.0
+
+                for i, sp in enumerate(span_pm):
+
+                    for M, xp in sp:
+                        jump_m.append(x0 + xp)
+
+                    x0 += span_lengths[i]
+
+                x_bmd, y_bmd = add_moment_jump_points(
+                    result_cb.x_global,
+                    result_cb.moment,
+                    jump_m
+                )
+
                 fig_bmd.add_trace(go.Scatter(
-                    x=result_cb.x_global, y=result_cb.moment, mode="lines",
-                    fill="tozeroy", line={"color": COLOR_BMD, "width": 2},
+                    x=x_bmd,
+                    y=y_bmd,
+                    mode="lines",
+                    fill="tozeroy",
+                    line={
+                        "color": COLOR_BMD,
+                        "width": 2
+                    },
                     fillcolor="rgba(255,43,43,0.22)",
-                    hovertemplate="x=%{x:.3f}m  M=%{y:.3f}kNm<extra></extra>"))
-                fig_bmd.update_yaxes(autorange="reversed")
-                st.plotly_chart(fig_bmd, use_container_width=True)
-            else:
-                st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"),
-                                use_container_width=True)
+                    hovertemplate=
+                    "x=%{x:.3f}m  M=%{y:.3f}kNm<extra></extra>"
+                ))
+
+                fig_bmd.update_yaxes(
+                    autorange="reversed"
+                )
+
+                st.plotly_chart(
+                    fig_bmd,
+                    use_container_width=True
+                )
         with d:
             if result_cb:
                 fig_el = base_figure("Elastic Curve", total_L_plot, "Deflection (visual)")
