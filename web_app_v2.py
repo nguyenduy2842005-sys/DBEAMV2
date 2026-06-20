@@ -210,34 +210,42 @@ st.set_page_config(
 def inject_css() -> None:
     st.markdown("""
     <style>
-    /* Ẩn các thành phần không cần thiết */
+    /* Ẩn những thứ không cần */
     #MainMenu, footer, [data-testid="stToolbar"] {
         display: none !important;
     }
 
-    /* === LUÔN HIỂN THỊ NÚT MỞ SIDEBAR === */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        color: var(--text-color) !important;
-        font-size: 1.5rem !important;
-        cursor: pointer !important;
-        margin-right: 0.5rem !important;
-        /* Đảm bảo không bị ẩn bởi header */
-        z-index: 99999 !important;
-        position: relative !important;
+    /* NÚT TOGGLE CỦA RIÊNG CHÚNG TA */
+    #custom-toggle {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 999999;
+        background: transparent;
+        border: none;
+        font-size: 28px;
+        cursor: pointer;
+        color: var(--text-color);
+        padding: 8px 12px;
+        border-radius: 6px;
+        background-color: rgba(255,255,255,0.8);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+    }
+    #custom-toggle:hover {
+        background-color: rgba(255,255,255,1);
+        transform: scale(1.05);
     }
 
-    /* Đảm bảo header hiển thị để chứa nút */
-    header {
-        display: flex !important;
-        background: transparent !important;
-        z-index: 9999 !important;
+    /* Đảm bảo sidebar có thể mở/đóng bằng class "closed" */
+    section[data-testid="stSidebar"] {
+        transition: width 0.2s ease !important;
     }
 
-    /* Các phần còn lại giữ nguyên */
+    /* Các phần khác giữ nguyên */
     .block-container {
         padding-top: 1.1rem;
         padding-bottom: 1.5rem;
@@ -281,39 +289,45 @@ def inject_css() -> None:
     }
     </style>
 
-    <!-- JavaScript đơn giản: nếu nút collapse biến mất, tạo lại -->
     <script>
     (function() {
-        function ensureCollapseButton() {
-            // Nếu nút chưa tồn tại, tạo một cái mới và đặt vào header
-            if (!document.querySelector('[data-testid="collapsedControl"]')) {
-                const header = document.querySelector('header');
-                if (header) {
-                    const btn = document.createElement('div');
-                    btn.setAttribute('data-testid', 'collapsedControl');
-                    btn.style.cssText = 'display:flex; align-items:center; cursor:pointer; font-size:1.8rem; padding:0 10px; color:var(--text-color);';
-                    btn.innerHTML = '☰';
-                    // Khi click, tìm sidebar và thực hiện toggle (dùng Streamlit's built-in behavior)
-                    btn.onclick = function() {
-                        // Tìm sidebar và chuyển đổi class 'closed' (Streamlit sử dụng class)
-                        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
-                        if (sidebar) {
-                            // Nếu sidebar có class 'closed' (thu gọn) thì xóa nó đi, ngược lại thêm vào
-                            if (sidebar.classList.contains('closed')) {
-                                sidebar.classList.remove('closed');
-                            } else {
-                                sidebar.classList.add('closed');
-                            }
-                        }
-                    };
-                    header.insertBefore(btn, header.firstChild);
+        // Tạo nút toggle sidebar
+        function createToggle() {
+            if (document.getElementById('custom-toggle')) return;
+
+            const btn = document.createElement('button');
+            btn.id = 'custom-toggle';
+            btn.innerHTML = '☰';
+            btn.setAttribute('aria-label', 'Toggle sidebar');
+            document.body.appendChild(btn);
+
+            // Sự kiện click: toggle class "closed" trên sidebar
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+                if (sidebar) {
+                    sidebar.classList.toggle('closed');
                 }
-            }
+            });
         }
-        // Chạy khi DOM load và mỗi khi Streamlit rerender
-        document.addEventListener('DOMContentLoaded', ensureCollapseButton);
-        new MutationObserver(ensureCollapseButton).observe(document.body, { childList: true, subtree: true });
-        setTimeout(ensureCollapseButton, 500);
+
+        // Chạy ngay khi DOM sẵn sàng và sau mỗi lần Streamlit rerender
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', createToggle);
+        } else {
+            createToggle();
+        }
+
+        // Dùng MutationObserver để theo dõi nếu sidebar bị thay đổi
+        const observer = new MutationObserver(function() {
+            if (!document.getElementById('custom-toggle')) {
+                createToggle();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Fallback sau 1 giây
+        setTimeout(createToggle, 1000);
     })();
     </script>
     """, unsafe_allow_html=True)
