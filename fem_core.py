@@ -343,45 +343,6 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> 
             th_val = float(dN @ u_e)
             M_val = float(EI * (d2N @ u_e))
             V_val = float(EI * (d3N @ u_e))
-
-            # ================================
-            # CỘNG ẢNH HƯỞNG TẢI TRỌNG
-            # ================================
-
-            span = data.spans[s_idx]
-
-            x_local_span = x - node_x[s_idx]
-
-            # tải phân bố đều
-            for q, x1, x2 in span.udls:
-
-                if x1 <= x_local_span <= x2:
-                    a = x_local_span - x1
-
-                    V_val += q * a
-
-                    M_val += q * a * a / 2
-
-            # tải tập trung
-            for P, xp in span.point_loads:
-
-                if x_local_span >= xp:
-                    V_val += P
-
-                    M_val += P * (x_local_span - xp)
-
-            # moment tập trung
-            for Mp, xp in span.point_moments:
-
-                if x_local_span >= xp:
-                    M_val += Mp
-
-            # add distributed load contribution to shear (from loading)
-            for q, x1_sp, x2_sp in data.spans[s_idx].udls:
-                x_sp_local = x - node_x[s_idx]
-                if x1_sp <= x_sp_local <= x2_sp:
-                    pass  # already handled via consistent loads in U
-
             x_out_list.append(x)
             V_list.append(V_val)
             M_list.append(M_val)
