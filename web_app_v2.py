@@ -377,32 +377,37 @@ def docx_with_images(
 
                     png_path = tmp.name
 
-                fig.write_image(
-                    png_path,
+                img_bytes = fig.to_image(
                     format="png",
                     width=1600,
                     height=900,
-                    scale=2,
-                    engine="kaleido"
+                    scale=2
                 )
 
-                doc.add_picture(
-                    png_path,
-                    width=Inches(6.5)
-                )
-
+                with open(png_path, "wb") as f:
+                    f.write(img_bytes)
+                    doc.add_picture(
+                        png_path,
+                        width=Inches(6.5)
+                    )
                 os.remove(png_path)
+
 
             except Exception as e:
 
+                import traceback
+
                 doc.add_paragraph(
+
                     f"[Lỗi xuất hình {name}]"
+
                 )
 
                 doc.add_paragraph(
-                    str(e)
-                )
 
+                    traceback.format_exc()
+
+                )
     out = io.BytesIO()
     doc.save(out)
 
@@ -856,23 +861,23 @@ def render_single_beam() -> None:
     with right:
         figures = []
 
-    if result:
-        figures.append(
+        if result:
+            figures.append(
             ("Load Diagram",
              plot_load_diagram_single(data))
         )
 
-        figures.append(
+            figures.append(
             ("Shear Force Diagram",
              plot_sfd_single(result))
         )
 
-        figures.append(
+            figures.append(
             ("Bending Moment Diagram",
              plot_bmd_single(result))
         )
 
-        figures.append(
+            figures.append(
             ("Elastic Curve",
              plot_elastic_single(data, result))
         )
@@ -1603,8 +1608,48 @@ def render_plane_frame() -> None:
         with c: st.plotly_chart(_pf_diagram_plot(result_pf, "shear", "SFD"), use_container_width=True)
         with d: st.plotly_chart(_pf_diagram_plot(result_pf, "axial", "AFD"), use_container_width=True)
     with right:
-        report_panel(result_pf.report if result_pf else None, "Thuyết Minh — Khung Phẳng", "plane_frame")
 
+        figures = []
+
+        if result_pf:
+            fig_geom = _pf_geometry_plot(
+                df_nodes,
+                df_el,
+                df_sup,
+                result_pf
+            )
+
+            fig_bmd = _pf_diagram_plot(
+                result_pf,
+                "moment",
+                "BMD"
+            )
+
+            fig_sfd = _pf_diagram_plot(
+                result_pf,
+                "shear",
+                "SFD"
+            )
+
+            fig_afd = _pf_diagram_plot(
+                result_pf,
+                "axial",
+                "AFD"
+            )
+
+            figures.extend([
+                ("Geometry", fig_geom),
+                ("Bending Moment Diagram", fig_bmd),
+                ("Shear Force Diagram", fig_sfd),
+                ("Axial Force Diagram", fig_afd),
+            ])
+
+        report_panel(
+            result_pf.report if result_pf else None,
+            "Thuyết Minh — Khung Phẳng",
+            "plane_frame",
+            figures=figures
+        )
 
 def _pf_geometry_plot(df_nodes, df_el, df_sup, result_pf: PlaneFrameResult | None) -> go.Figure:
     try:
