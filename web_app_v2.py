@@ -5,6 +5,7 @@ Tabs:
   2. Continuous Beam — FEM Euler-Bernoulli
   3. Plane Frame     — FEM 2D khung phẳng
 """
+
 from __future__ import annotations
 
 import io
@@ -348,6 +349,8 @@ def docx_with_images(
 
     from docx import Document
     from docx.shared import Inches
+    import tempfile
+    import os
 
     doc = Document()
 
@@ -357,6 +360,7 @@ def docx_with_images(
         doc.add_paragraph(line)
 
     if figures:
+
         doc.add_page_break()
         doc.add_heading("Biểu đồ kết quả", level=1)
 
@@ -364,42 +368,51 @@ def docx_with_images(
 
             doc.add_heading(name, level=2)
 
-            img = io.BytesIO()
-
             try:
 
+                with tempfile.NamedTemporaryFile(
+                    suffix=".png",
+                    delete=False
+                ) as tmp:
+
+                    png_path = tmp.name
+
                 fig.write_image(
-                    img,
+                    png_path,
                     format="png",
-                    width=900,
-                    height=500,
-                    scale=2
+                    width=1600,
+                    height=900,
+                    scale=2,
+                    engine="kaleido"
                 )
 
-                img.seek(0)
-
                 doc.add_picture(
-                    img,
+                    png_path,
                     width=Inches(6.5)
                 )
 
-            except Exception:
+                os.remove(png_path)
+
+            except Exception as e:
 
                 doc.add_paragraph(
-                    f"[Không thể chèn hình: {name}]"
+                    f"[Lỗi xuất hình {name}]"
+                )
+
+                doc.add_paragraph(
+                    str(e)
                 )
 
     out = io.BytesIO()
     doc.save(out)
 
     return out.getvalue()
-
-
 def report_panel(
     report_text: str | None,
     report_title: str,
     key_prefix: str,
     figures=None
+
 ) -> None:
     st.subheader("📋 Thuyết minh tính toán")
     if not report_text:
@@ -838,10 +851,38 @@ def render_single_beam() -> None:
             plot_bmd_single(result) if result else base_figure("Moment Diagram", data.length, "kNm"),
             use_container_width=True)
         with d: st.plotly_chart(plot_elastic_single(data, result), use_container_width=True)
+
+
     with right:
-        report_panel(result.report if result else None, "Thuyết Minh — Dầm Đơn", "single_beam")
+        figures = []
 
+    if result:
+        figures.append(
+            ("Load Diagram",
+             plot_load_diagram_single(data))
+        )
 
+        figures.append(
+            ("Shear Force Diagram",
+             plot_sfd_single(result))
+        )
+
+        figures.append(
+            ("Bending Moment Diagram",
+             plot_bmd_single(result))
+        )
+
+        figures.append(
+            ("Elastic Curve",
+             plot_elastic_single(data, result))
+        )
+
+    report_panel(
+        result.report if result else None,
+        "Thuyết Minh — Dầm Đơn",
+        "single_beam",
+        figures=figures
+    )
 # ══════════════════════════════════════════════════════
 #  ── TAB 2: CONTINUOUS BEAM ──────────────────────────
 # ══════════════════════════════════════════════════════
@@ -936,8 +977,11 @@ def render_continuous_beam() -> None:
                      ("Gối", f"{len(result_cb.reactions)} phản lực")])
 
     total_L_plot = sum(span_lengths)
+    fig_load = None
+    fig_sfd = None
+    fig_bmd = None
+    fig_el = None
     left, right = st.columns([1.7, 1], gap="large")
-
     with left:
         fig_load = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds,span_pm,
     )
@@ -994,8 +1038,29 @@ def render_continuous_beam() -> None:
                 fig_empty.update_yaxes(range=[-1.5, 1.2], fixedrange=True)
                 st.plotly_chart(fig_empty, use_container_width=True)
     with right:
-        report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
+        figures = []
+
+        if result_cb:
+
+            if fig_load is not None:
+                figures.append(("Load Diagram", fig_load))
+
+            if fig_sfd is not None:
+                figures.append(("Shear Force Diagram", fig_sfd))
+
+            if fig_bmd is not None:
+                figures.append(("Bending Moment Diagram", fig_bmd))
+
+            if fig_el is not None:
+                figures.append(("Elastic Curve", fig_el))
+
+        report_panel(
+            result_cb.report if result_cb else None,
+            "Thuyết Minh — Dầm Liên Tục",
+            "cont_beam",
+            figures=figures
+        )
 
 def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.Figure:
     """Hàm dựng khung dầm và gối đỡ nền đồng bộ tỷ lệ hiển thị"""
@@ -1606,7 +1671,7 @@ def _hex_to_rgb(hex_color: str) -> str:
 # ══════════════════════════════════════════════════════
 def main() -> None:
     inject_css()
-    st.title("🏗️ Beam Analysis Suite")
+    st.title("🏗️ DBeam Analysis  ")
 
     tab1, tab2, tab3 = st.tabs(["📏 Single Beam", "🔗 Continuous Beam", "🏛️ Plane Frame"])
     with tab1: render_single_beam()
