@@ -451,8 +451,9 @@ def plot_load_diagram_single(data: BeamInput) -> go.Figure:
         nx = -ty
         ny = tx
 
-        arrow_len = l * 0.045
-        arrow_w = l * 0.012
+        # SỬA LẠI KÍCH THƯỚC MŨI TÊN TRÙNG PHIÊN BẢN CŨ
+        arrow_len = l * 0.018
+        arrow_w = l * 0.005
 
         p1 = (
             xe,
@@ -1227,16 +1228,13 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, s
                 tx /= length
                 ty /= length
 
-                # chiều dài mũi tên giống point load
-                arrow_len = total_L * 0.06
-
-                # đầu tam giác mũi tên moment
-
-                arrow_len = total_L * 0.045
-                arrow_w = total_L * 0.012
-
+                # vector pháp tuyến để tạo tam giác
                 nx = -ty
                 ny = tx
+
+                # SỬA LẠI KÍCH THƯỚC MŨI TÊN DẦM LIÊN TỤC TRÙNG PHIÊN BẢN CŨ
+                arrow_len = total_L * 0.018
+                arrow_w = total_L * 0.005
 
                 p1 = (xe, ye)
 
