@@ -210,34 +210,11 @@ st.set_page_config(
 def inject_css() -> None:
     st.markdown("""
     <style>
-    #MainMenu, footer, header, [data-testid="stToolbar"] { display:none !important; }
+    #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
     .block-container { padding-top:1.1rem; padding-bottom:1.5rem; max-width:1680px; }
-    
-    .metric-strip {
-        display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
-        gap:10px; margin:0.2rem 0 0.8rem;
-    }
-    .metric-card {
-        background: var(--background-color);
-        border: 1px solid var(--secondary-background-color);
-        border-radius:6px; padding:10px 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .metric-label { color: var(--text-color); opacity: 0.7; font-size:0.78rem; margin-bottom:3px; }
-    .metric-value { color: var(--text-color); font-weight:700; font-size:1.08rem; }
-    
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: var(--secondary-background-color);
-    }
-    .stPlotlyChart {
-        border: 1px solid var(--secondary-background-color);
-        border-radius:6px; padding:6px;
-        background-color: transparent !important;
-    }
-    textarea { font-family:Consolas,"Courier New",monospace !important; }
+    ...
     </style>
     """, unsafe_allow_html=True)
-
 
 # ══════════════════════════════════════════════════════
 #  SHARED HELPERS
@@ -375,8 +352,7 @@ def _minimal_docx_bytes(report_text: str, title: str = "Thuyết Minh Tính Toá
 
 def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
     """
-    Fallback dùng Matplotlib, vẽ lại tất cả trace (đường, fill, marker),
-    annotation (text, mũi tên đúng chiều) và shape.
+    Fallback dùng Matplotlib, vẽ lại trace, marker, shape và annotation (text, mũi tên đúng chiều).
     Không cần Chrome/kaleido.
     """
     try:
@@ -396,18 +372,15 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                     color = tr.line.color if hasattr(tr, 'line') and tr.line else '#0000ff'
                     linewidth = tr.line.width if hasattr(tr, 'line') and tr.line else 1.5
 
-                    # Vẽ đường nếu có 'lines' trong mode
                     mode = tr.mode if hasattr(tr, 'mode') else 'lines'
                     if 'lines' in mode:
                         plt.plot(x, y, color=color, linewidth=linewidth)
 
-                    # Vẽ marker nếu có 'markers' trong mode
                     if 'markers' in mode:
                         marker_size = tr.marker.size if hasattr(tr, 'marker') and tr.marker else 7
                         marker_color = tr.marker.color if hasattr(tr, 'marker') and tr.marker else color
                         plt.scatter(x, y, s=marker_size**2, color=marker_color, edgecolors='black', linewidth=0.5)
 
-                    # Fill nếu có fill
                     if hasattr(tr, 'fill') and tr.fill == 'tozeroy':
                         plt.fill_between(x, y, 0, color=color, alpha=0.2)
                     elif hasattr(tr, 'fill') and tr.fill == 'toself':
@@ -434,7 +407,7 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                 except Exception:
                     pass
 
-        # 3. Vẽ các annotation (text, mũi tên)
+        # 3. Vẽ các annotation (text, mũi tên) – chỉ khi annotations không rỗng
         if fig.layout.annotations:
             for ann in fig.layout.annotations:
                 try:
@@ -448,15 +421,13 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                                  ha=ann.xanchor if ann.xanchor else 'center',
                                  va=ann.yanchor if ann.yanchor else 'center')
 
-                    # Arrow (mũi tên)
+                    # Mũi tên: vẽ từ (x, y) đến (ax, ay) (đúng với Plotly)
                     if ann.showarrow:
-                        # Plotly: x,y là điểm ngọn (head), ax,ay là điểm gốc (tail)
-                        x_start = ann.ax if ann.ax is not None else 0
-                        y_start = ann.ay if ann.ay is not None else 0
-                        x_end = ann.x if ann.x is not None else 0
-                        y_end = ann.y if ann.y is not None else 0
+                        x_start = ann.x if ann.x is not None else 0
+                        y_start = ann.y if ann.y is not None else 0
+                        x_end = ann.ax if ann.ax is not None else 0
+                        y_end = ann.ay if ann.ay is not None else 0
 
-                        # Dùng plt.annotate để vẽ mũi tên từ start đến end
                         plt.annotate('', xy=(x_end, y_end), xytext=(x_start, y_start),
                                      arrowprops=dict(arrowstyle='->',
                                                      color=ann.arrowcolor if ann.arrowcolor else 'black',
@@ -464,7 +435,7 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
                 except Exception:
                     pass
 
-        # 4. Tiêu đề và trục
+        # 4. Tiêu đề, nhãn trục, grid
         title = fig.layout.title.text if fig.layout.title else ''
         plt.title(title)
         if fig.layout.xaxis and fig.layout.xaxis.title:
@@ -473,14 +444,11 @@ def plotly_to_png_fallback(fig: go.Figure) -> bytes | None:
             plt.ylabel(fig.layout.yaxis.title.text)
         plt.grid(True)
 
-        # Đồng bộ tỉ lệ trục nếu có
+        # Đồng bộ khoảng trục
         if fig.layout.xaxis and fig.layout.xaxis.range:
             plt.xlim(fig.layout.xaxis.range)
         if fig.layout.yaxis and fig.layout.yaxis.range:
             plt.ylim(fig.layout.yaxis.range)
-
-        # Đảm bảo tỉ lệ bằng nhau nếu cần (tuỳ chỉnh)
-        # plt.gca().set_aspect('equal')  # có thể bỏ comment nếu muốn
 
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
