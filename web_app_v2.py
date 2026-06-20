@@ -576,11 +576,16 @@ def render_continuous_beam() -> None:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
-                # Gọi hàm dựng khung dầm nền nguyên bản (Tuyệt đối KHÔNG có tải trọng)
+                # Gọi hàm dựng khung dầm nền nguyên bản (Tuyệt đối SẠCH LỰC)
                 fig_el = _cb_draw_base_beam_and_supports(total_L_plot, span_lengths, support_kinds)
-                fig_el.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}})
 
-                # Tính toán và vẽ đường cong võng đè lên dầm nền
+                # SỬA TẠI ĐÂY: Đồng bộ nới lề dưới cho biểu đồ chuyển vị
+                fig_el.update_layout(
+                    title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}},
+                    margin=dict(l=55, r=20, t=60, b=80)  # Tăng b lên 80 để không mất chân sàn
+                )
+
+                # Tính toán và vẽ đường cong võng đè lên dầm nền công trình
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
                 y_vis = -result_cb.deflection * (0.72 / mw)
 
@@ -591,14 +596,10 @@ def render_continuous_beam() -> None:
                     customdata=result_cb.deflection
                 ))
 
-                # Giữ nguyên tỷ lệ nới rộng hệ trục và mở nhãn số liệu chuyển vị
-                fig_el.update_yaxes(range=[-1.35, 1.05], showticklabels=True, title="Deflection (visual)")
+                # Ép trục hiển thị không cắt biên
+                fig_el.update_yaxes(range=[-1.2, 1.05], autorange=False, showticklabels=True,
+                                    title="Deflection (visual)")
                 st.plotly_chart(fig_el, use_container_width=True)
-            else:
-                # Khi chưa bấm giải tính
-                fig_empty = base_figure("Elastic Curve", total_L_plot, "Deflection")
-                fig_empty.update_yaxes(range=[-1.35, 1.05])
-                st.plotly_chart(fig_empty, use_container_width=True)
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
@@ -607,12 +608,21 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
     """Hàm bổ trợ chuyên biệt: Chỉ vẽ trục dầm và các gối đỡ, nới rộng khung để không bao giờ mất chân"""
     fig = base_figure("Dầm liên tục", total_L)
 
-    # Nới rộng hẳn range trục Y xuống -1.35 để đảm bảo chân gối không bị cắt trên mọi màn hình
-    fig.update_yaxes(range=[-1.35, 1.05], showticklabels=False, title="")
+    # SỬA/THÊM TẠI ĐÂY: Nới cấu hình lề dưới layout để chừa không gian hiển thị chân gối & nhãn N0, N1
+    fig.update_layout(
+        margin=dict(l=55, r=20, t=60, b=80),  # Tăng b từ 45 lên 80
+    )
+
+    # Ép cố định trục Y, tắt autorange để Plotly không tự co cụm bóp nghẹt gối đỡ
+    fig.update_yaxes(
+        range=[-1.2, 1.05],
+        autorange=False,
+        showticklabels=False,
+        title=""
+    )
 
     # Vẽ thanh dầm chính màu xám
-    fig.add_trace(
-        go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
 
     # Vẽ hệ thống gối đỡ chuẩn kích thước độc lập pixel
     node_xs = [0.0] + list(np.cumsum(span_lengths))
