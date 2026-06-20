@@ -243,28 +243,32 @@ def draw_supports_single(fig: go.Figure, data: BeamInput) -> None:
             line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP,
             hoverinfo="skip"))
 
-        # Node L (Gối di động dầm đơn - Tối giản chuẩn kỹ thuật)
-        # Điểm chấm 1 (Tiếp xúc đáy dầm y = 0)
+        # Node L (Gối di động dầm đơn - Tinh chỉnh khoảng cách thoáng, đẹp)
+        y_top = -0.08
+        y_bot = -0.36
+        y_floor = -0.44
+
+        # Điểm chấm 1 (Phía trên)
         fig.add_trace(go.Scatter(
-            x=[l], y=[0], mode="markers",
+            x=[l], y=[y_top], mode="markers",
             marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
             hoverinfo="skip"
         ))
-        # Điểm chấm 2 (Nằm phía dưới tại y = -0.28)
+        # Điểm chấm 2 (Phía dưới)
         fig.add_trace(go.Scatter(
-            x=[l], y=[-0.28], mode="markers",
+            x=[l], y=[y_bot], mode="markers",
             marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
             hoverinfo="skip"
         ))
-        # Thanh thẳng đứng nối xuyên tâm giữa 2 điểm
+        # Thanh thẳng đứng nối liên kết
         fig.add_trace(go.Scatter(
-            x=[l, l], y=[0, -0.28], mode="lines",
+            x=[l, l], y=[y_top, y_bot], mode="lines",
             line=dict(color=COLOR_SUP, width=1.5),
             hoverinfo="skip"
         ))
-        # Mặt sàn phẳng ngang nằm dưới chân
+        # Mặt sàn phẳng ngang
         fig.add_trace(go.Scatter(
-            x=[l - l / 34, l + l / 34], y=[-0.36, -0.36], mode="lines",
+            x=[l - l / 34, l + l / 34], y=[y_floor, y_floor], mode="lines",
             line=dict(color=COLOR_SUP, width=2),
             hoverinfo="skip"
         ))
@@ -277,7 +281,7 @@ def draw_supports_single(fig: go.Figure, data: BeamInput) -> None:
 def plot_load_diagram_single(data: BeamInput) -> go.Figure:
     l = data.length
     fig = base_figure("Load diagram", l)
-    fig.update_yaxes(range=[-1.05, 1.05], showticklabels=False, title="")
+    fig.update_yaxes(range=[-1.2, 1.05], showticklabels=False, title="")
     fig.add_trace(go.Scatter(x=[0, l], y=[0, 0], mode="lines",
                              line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
     draw_supports_single(fig, data)
@@ -353,7 +357,7 @@ def plot_elastic_single(data: BeamInput, result: BeamResult | None) -> go.Figure
             customdata=result.deflection
         ))
 
-    fig.update_yaxes(range=[-1.05, 1.05], title="Deflection (visual)")
+    fig.update_yaxes(range=[-1.2, 1.05], title="Deflection (visual)")
     return fig
 
 
@@ -587,7 +591,7 @@ def render_continuous_beam() -> None:
 def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -> go.Figure:
     total_L = sum(span_lengths)
     fig = base_figure("Load Diagram — Dầm liên tục", total_L)
-    fig.update_yaxes(range=[-1.05, 1.05], showticklabels=False, title="")
+    fig.update_yaxes(range=[-1.2, 1.05], showticklabels=False, title="")
 
     # Trục dầm chính
     fig.add_trace(go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
@@ -611,28 +615,32 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
                     fillcolor=COLOR_SUP, hoverinfo="skip"
                 ))
             elif kind == "roller":
-                # Gối di động: Thể hiện tối giản bằng 2 dấu chấm độc lập và 1 đường thẳng đứng
-                # Điểm chấm 1 (Tiếp xúc đáy dầm y = 0)
+                # Gối di động: Dịch chuyển xuống dưới để không đè lên dầm và nối khít sàn phẳng
+                y_top = -0.08  # Điểm chấm trên: Đẩy xuống dưới mép dầm một chút
+                y_bot = -0.36  # Điểm chấm dưới
+                y_floor = -0.44  # Mặt sàn ngang: Kéo dịch xuống để tạo khoảng cách thoáng đẹp
+
+                # Điểm chấm 1 (Phía trên - sát dưới dầm)
                 fig.add_trace(go.Scatter(
-                    x=[xp], y=[0], mode="markers",
+                    x=[xp], y=[y_top], mode="markers",
                     marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
                     hoverinfo="skip"
                 ))
-                # Điểm chấm 2 (Nằm phía dưới tại y = -0.28)
+                # Điểm chấm 2 (Phía dưới - sát mặt sàn)
                 fig.add_trace(go.Scatter(
-                    x=[xp], y=[-0.28], mode="markers",
+                    x=[xp], y=[y_bot], mode="markers",
                     marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
                     hoverinfo="skip"
                 ))
-                # Thanh thẳng đứng nối xuyên tâm giữa 2 điểm
+                # Thanh thẳng đứng nối xuyên suốt và khít từ điểm trên xuống điểm dưới
                 fig.add_trace(go.Scatter(
-                    x=[xp, xp], y=[0, -0.28], mode="lines",
+                    x=[xp, xp], y=[y_top, y_bot], mode="lines",
                     line=dict(color=COLOR_SUP, width=1.5),
                     hoverinfo="skip"
                 ))
-                # Mặt sàn phẳng ngang nằm dưới chân
+                # Mặt sàn phẳng ngang nằm khít ngay dưới chân điểm chấm số 2
                 fig.add_trace(go.Scatter(
-                    x=[xp - total_L / 34, xp + total_L / 34], y=[-0.36, -0.36], mode="lines",
+                    x=[xp - total_L / 34, xp + total_L / 34], y=[y_floor, y_floor], mode="lines",
                     line=dict(color=COLOR_SUP, width=2),
                     hoverinfo="skip"
                 ))
