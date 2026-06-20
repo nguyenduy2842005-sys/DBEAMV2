@@ -18,9 +18,7 @@ import numpy as np
 # ══════════════════════════════════════════════════════
 #  DATA CLASSES — INPUT
 # ══════════════════════════════════════════════════════
-MESH_RATIO = 0.002
-PTS_PER_ELEM = 100
-UDL_INTEGRATION_PTS = 100
+
 @dataclass
 class SpanDef:
     """One span of a continuous beam."""
@@ -147,7 +145,7 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
         ])
 
     # Gauss quadrature over [x1/L, x2/L]
-    n_pts = 200
+    n_pts = 16
     a, b = x1 / L_elem, x2 / L_elem
     xi_pts = np.linspace(a, b, n_pts)
     dxi = (b - a) / (n_pts - 1)
@@ -163,8 +161,8 @@ def _consistent_load_udl(q: float, x1: float, x2: float, L_elem: float) -> np.nd
     return f
 
 
-def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER_ELEM) -> ContinuousBeamResult:
-    """Assemble global stiffness, apply BCs, solve, recover diagrams."""
+    def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = 20) -> ContinuousBeamResult:
+    """"Assemble global stiffness, apply BCs, solve, recover diagrams."""
 
     spans = data.spans
     n_spans = len(spans)
@@ -181,12 +179,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
 
     gnode = 0
     for s_idx, span in enumerate(spans):
-        TARGET_ELEMENT_SIZE = 0.002 * total_L
-
-        n_elem = max(
-            20,
-            round(span.length / (MESH_RATIO * total_L))
-        )
+        n_elem = max(2, round(span.length / (0.01 * total_L)))
         Le = span.length / n_elem
         for e in range(n_elem):
             mesh_elems.append({
@@ -195,8 +188,6 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
                 "span_idx": s_idx,
                 "x0_global": node_x[s_idx] + e * Le,
             })
-            n_pts = UDL_INTEGRATION_PTS
-
             elem_nodes.append((gnode, gnode + 1))
             gnode += 1
             global_node_x.append(node_x[s_idx] + (e + 1) * Le)
@@ -209,11 +200,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
     span_node_map = [0]
     acc = 0
     for s_idx, span in enumerate(spans):
-        TARGET_ELEMENT_SIZE = 0.002 * total_L
-        n_elem = max(
-            20,
-            round(span.length / TARGET_ELEMENT_SIZE)
-        )
+        n_elem = max(2, round(span.length / (0.01 * total_L)))
         acc += n_elem
         span_node_map.append(acc)
     # span_node_map[k] = mesh global-node index at left end of span k (0) and at each support
@@ -233,12 +220,7 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
 
     # ── Consistent nodal loads from spans ──
     for s_idx, span in enumerate(spans):
-        TARGET_ELEMENT_SIZE = 0.002 * total_L
-
-        n_elem = max(
-            20,
-            round(span.length / TARGET_ELEMENT_SIZE)
-        )
+        n_elem = max(2, round(span.length / (0.01 * total_L)))
         Le = span.length / n_elem
         gnode_start = span_node_map[s_idx]
 
@@ -297,7 +279,6 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
     # ── Boundary conditions ──
     # Map span-level support nodes to mesh global nodes
     # Support node index refers to span-boundary nodes (0..n_spans)
-
     constrained_dofs = []
     for sup in data.supports:
         mesh_gnode = span_node_map[sup.node]
@@ -362,48 +343,12 @@ def solve_continuous_beam(data: ContinuousBeamInput, pts_per_elem: int = PTS_PER
             M_val  = float(EI * (d2N @ u_e))
             V_val  = float(EI * (d3N @ u_e))
 
-            # -------------------------------------------------
-            # Elastic FEM contribution
-            # -------------------------------------------------
+            # add distributed load contribution to shear (from loading)
+            for q, x1_sp, x2_sp in data.spans[s_idx].udls:
+                x_sp_local = x - node_x[s_idx]
+                if x1_sp <= x_sp_local <= x2_sp:
+                    pass  # already handled via consistent loads in U
 
-            M_val = float(EI * (d2N @ u_e))
-            V_val = float(EI * (d3N @ u_e))
-
-            # -------------------------------------------------
-            # Load contribution
-            # -------------------------------------------------
-
-            x_sp_local = x - node_x[s_idx]
-
-            for q, x1_udl, x2_udl in data.spans[s_idx].udls:
-
-                if x_sp_local < x1_udl:
-                    continue
-
-                if x_sp_local <= x2_udl:
-                    lx = x_sp_local - x1_udl
-
-                    V_val -= q * lx
-                    M_val -= q * lx ** 2 / 2
-
-                else:
-                    Lload = x2_udl - x1_udl
-
-                    V_val -= q * Lload
-
-                    M_val -= (
-                            q * Lload * (x_sp_local - x1_udl)
-                            - q * Lload ** 2 / 2
-                    )
-                    for P, xp in data.spans[s_idx].point_loads:
-
-                        if x_sp_local >= xp:
-                            V_val -= P
-                            M_val -= P * (x_sp_local - xp)
-                            for M0, xm in data.spans[s_idx].point_moments:
-
-                                if x_sp_local >= xm:
-                                    M_val -= M0
             x_out_list.append(x)
             V_list.append(V_val)
             M_list.append(M_val)
