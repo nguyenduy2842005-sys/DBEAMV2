@@ -656,49 +656,61 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
 
 def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -> go.Figure:
     total_L = sum(span_lengths)
-    # Lấy khung dầm và gối đỡ nền
+    # 1. Lấy khung dầm và gối đỡ nền sạch từ hàm bổ trợ độc lập
     fig = _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds)
     fig.update_layout(title={"text": "<b>Load Diagram — Dầm liên tục</b>", "x": 0.5})
 
     # --- CHỈ VẼ TẢI TRỌNG TRÊN BIỂU ĐỒ NÀY ---
     node_xs = [0.0] + list(np.cumsum(span_lengths))
 
-    # 1. Vẽ tải trọng phân bố đều UDL
-    for i, q in enumerate(span_udl):
-        if abs(q) > 1e-5:
-            x0 = node_xs[i]
-            x1 = node_xs[i + 1]
-            sign = 1.0 if q > 0 else -1.0
-            y_val = sign * 0.45
-            fig.add_trace(go.Scatter(
-                x=[x0, x1, x1, x0, x0], y=[0, 0, y_val, y_val, 0],
-                fill="toself", fillcolor="rgba(40,167,69,0.12)",
-                line={"color": "#28a745", "width": 1},
-                name=f"S{i} UDL", hovertemplate=f"UDL: {q:.2f} kN/m<extra></extra>"
-            ))
-            fig.add_annotation(x=(x0 + x1) / 2, y=y_val + sign * 0.12, text=f"{q:.1f}kN/m", showarrow=False,
-                               font={"size": 10, "color": "#28a745"})
+    # Duyệt qua từng nhịp để bóc tách các danh sách tải trọng con bên trong
+    for i in range(len(span_lengths)):
+        x_start = node_xs[i]  # Tọa độ gốc toàn cục của nhịp hiện tại
 
-    # 2. Vẽ tải trọng tập trung Point Load
-    for i, pl_list in enumerate(span_pl):
-        x_start = node_xs[i]
-        for (P, x_loc) in pl_list:
+        # 1. Vẽ tải trọng phân bố đều UDL cho nhịp hiện tại
+        for q, x1_local, x2_local in span_udl[i]:
+            if abs(q) > 1e-5:
+                # Chuyển đổi tọa độ local của nhịp sang tọa độ global của toàn bộ dầm
+                x0_global = x_start + x1_local
+                x1_global = x_start + x2_local
+
+                sign = 1.0 if q > 0 else -1.0
+                y_val = sign * 0.45
+
+                fig.add_trace(go.Scatter(
+                    x=[x0_global, x1_global, x1_global, x0_global, x0_global],
+                    y=[0, 0, y_val, y_val, 0],
+                    fill="toself", fillcolor="rgba(40,167,69,0.12)",
+                    line={"color": "#28a745", "width": 1},
+                    name=f"S{i} UDL", hovertemplate=f"UDL: {q:.2f} kN/m<extra></extra>"
+                ))
+                fig.add_annotation(
+                    x=(x0_global + x1_global) / 2, y=y_val + sign * 0.12,
+                    text=f"{q:.1f}kN/m", showarrow=False,
+                    font={"size": 10, "color": "#28a745"}
+                )
+
+        # 2. Vẽ tải trọng tập trung Point Load cho nhịp hiện tại
+        for P, x_loc in span_pl[i]:
             if abs(P) > 1e-5:
-                xp = x_start + x_loc
+                # Chuyển đổi tọa độ local sang global
+                xp_global = x_start + x_loc
+
                 sign = 1.0 if P > 0 else -1.0
                 y_arr_start = sign * 0.55
                 y_arr_end = sign * 0.05
+
                 fig.add_annotation(
-                    x=xp, y=y_arr_end, ax=xp, ay=y_arr_start,
+                    x=xp_global, y=y_arr_end, ax=xp_global, ay=y_arr_start,
                     xref="x", yref="y", axref="x", ayref="y",
                     showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#28a745"
                 )
-                fig.add_annotation(x=xp, y=y_arr_start + sign * 0.12, text=f"{P:.1f}kN", showarrow=False,
-                                   font={"size": 10, "color": "#28a745"})
-
+                fig.add_annotation(
+                    x=xp_global, y=y_arr_start + sign * 0.12,
+                    text=f"{P:.1f}kN", showarrow=False,
+                    font={"size": 10, "color": "#28a745"}
+                )
     return fig
-
-
 # ══════════════════════════════════════════════════════
 #  ── TAB 3: PLANE FRAME ──────────────────────────────
 # ══════════════════════════════════════════════════════
