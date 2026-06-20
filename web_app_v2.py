@@ -236,14 +236,30 @@ def validate_single(data: BeamInput) -> list[str]:
 def draw_supports_single(fig: go.Figure, data: BeamInput) -> None:
     l = data.length
     if data.beam_type == "simple":
-        for x0 in [0, l]:
-            fig.add_trace(go.Scatter(
-                x=[x0, x0+l/34, x0-l/34, x0], y=[0, -0.37, -0.37, 0],
-                fill="toself", mode="lines",
-                line={"color": COLOR_SUP, "width": 1}, fillcolor=COLOR_SUP,
-                hoverinfo="skip"))
+        # Node 0 (Gối cố định - Pin: giữ nguyên hình tam giác)
+        fig.add_trace(go.Scatter(
+            x=[0, l / 34, -l / 34, 0], y=[0, -0.37, -0.37, 0],
+            fill="toself", mode="lines",
+            line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP,
+            hoverinfo="skip"))
+
+        # Node L (Gối di động - Roller kiểu mới)
+        r_sz = 0.08  # Bán kính vòng tròn (tùy chỉnh trực quan)
+        # Vòng tròn trên (tiếp xúc đáy dầm)
+        fig.add_shape(type="circle", x0=l - r_sz, y0=-2 * r_sz, x1=l + r_sz, y1=0,
+                      line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
+        # Vòng tròn dưới
+        fig.add_shape(type="circle", x0=l - r_sz, y0=-4 * r_sz, x1=l + r_sz, y1=-2 * r_sz,
+                      line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
+        # Thanh nối thẳng đứng ở giữa hai vòng tròn
+        fig.add_shape(type="line", x0=l, y0=-r_sz, x1=l, y1=-3 * r_sz,
+                      line={"color": COLOR_SUP, "width": 2})
+        # Đường mặt phẳng ngang chân gối
+        fig.add_shape(type="line", x0=l - l / 34, y0=-4 * r_sz, x1=l + l / 34, y1=-4 * r_sz,
+                      line={"color": COLOR_SUP, "width": 2})
     else:
-        fig.add_shape(type="rect", x0=l, x1=l+l/42, y0=-0.42, y1=0.42,
+        # Gối ngàm cố định (Cantilever - Giữ nguyên)
+        fig.add_shape(type="rect", x0=l, x1=l + l / 42, y0=-0.42, y1=0.42,
                       fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
 
@@ -309,16 +325,23 @@ def plot_bmd_single(result: BeamResult) -> go.Figure:
 def plot_elastic_single(data: BeamInput, result: BeamResult | None) -> go.Figure:
     fig = plot_load_diagram_single(data)
     fig.update_layout(title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 15}})
-    fig.data = tuple(fig.data[:1])
+
+    # Giữ lại thanh dầm gốc và gối đỡ, xóa bỏ các mũi tên tải trọng để tránh rối mắt
     fig.layout.annotations = tuple()
-    draw_supports_single(fig, data)
+
     if result is not None:
+        # Tính toán tỷ lệ trực quan cho đường cong võng
         mw = float(np.max(np.abs(result.deflection)))
         y = -result.deflection * (0.72 / mw) if mw > 0 else result.deflection
-        fig.add_trace(go.Scatter(x=result.x, y=y, mode="lines",
-                                 line={"color": COLOR_ELAST, "width": 4},
-                                 hovertemplate="x=%{x:.2f}m  w/EI=%{customdata:.4f}<extra></extra>",
-                                 customdata=result.deflection))
+
+        # Thêm đường cong võng đè lên trên thanh dầm
+        fig.add_trace(go.Scatter(
+            x=result.x, y=y, mode="lines",
+            line={"color": COLOR_ELAST, "width": 4},
+            hovertemplate="x=%{x:.2f}m  w/EI=%{customdata:.4f}<extra></extra>",
+            customdata=result.deflection
+        ))
+
     fig.update_yaxes(range=[-1.05, 1.05], title="Deflection (visual)")
     return fig
 
@@ -565,28 +588,39 @@ def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -
         fig.add_annotation(x=mid, y=0.15, text=f"L{i+1}={Ls:.1f}m", showarrow=False, font={"size": 10})
         x_acc += Ls
 
-    # VẼ GỐI ĐỠ PIN & ROLLER KHÔNG LỖI
-    node_xs = [0.0] + list(np.cumsum(span_lengths))
-    for i, kind in enumerate(support_kinds):
-        xp = node_xs[i]
-        if kind == "pin":
-            fig.add_trace(go.Scatter(
-                x=[xp, xp + total_L/34, xp - total_L/34, xp], y=[0, -0.37, -0.37, 0],
-                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
-            ))
-        elif kind == "roller":
-            fig.add_trace(go.Scatter(
-                x=[xp, xp + total_L/36, xp - total_L/36, xp], y=[0, -0.28, -0.28, 0],
-                fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5}, fillcolor=COLOR_SUP, hoverinfo="skip"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[xp - total_L/30, xp + total_L/30], y=[-0.36, -0.36],
-                mode="lines", line={"color": COLOR_SUP, "width": 3}, hoverinfo="skip"
-            ))
-        elif kind == "fixed":
-            fig.add_shape(type="rect", x0=xp-total_L/80, x1=xp+total_L/80, y0=-0.42, y1=0.42, fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
+        # VẼ GỐI ĐỠ PIN & ROLLER KHÔNG LỖI
+        node_xs = [0.0] + list(np.cumsum(span_lengths))
+        for i, kind in enumerate(support_kinds):
+            xp = node_xs[i]
+            if kind == "pin":
+                # Gối cố định: Giữ nguyên hình tam giác màu đỏ đổ đặc
+                fig.add_trace(go.Scatter(
+                    x=[xp, xp + total_L / 34, xp - total_L / 34, xp], y=[0, -0.37, -0.37, 0],
+                    fill="toself", mode="lines", line={"color": COLOR_SUP, "width": 1.5},
+                    fillcolor=COLOR_SUP, hoverinfo="skip"
+                ))
+            elif kind == "roller":
+                # Gối di động: 2 vòng tròn chồng lên nhau + thanh đứng + sàn phẳng ngang
+                r_sz = 0.08  # Bán kính vòng tròn tương thích tỷ lệ trục
 
-        fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
+                # Vòng tròn phía trên (tiếp xúc đáy thanh dầm chính)
+                fig.add_shape(type="circle", x0=xp - r_sz, y0=-2 * r_sz, x1=xp + r_sz, y1=0,
+                              line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
+                # Vòng tròn phía dưới
+                fig.add_shape(type="circle", x0=xp - r_sz, y0=-4 * r_sz, x1=xp + r_sz, y1=-2 * r_sz,
+                              line={"color": COLOR_SUP, "width": 2}, fillcolor="#ffffff")
+                # Thanh trục đứng nối tâm giữa 2 vòng tròn
+                fig.add_shape(type="line", x0=xp, y0=-r_sz, x1=xp, y1=-3 * r_sz,
+                              line={"color": COLOR_SUP, "width": 2})
+                # Đường mặt phẳng nền đặt gối di động
+                fig.add_shape(type="line", x0=xp - total_L / 34, y0=-4 * r_sz, x1=xp + total_L / 34, y1=-4 * r_sz,
+                              line={"color": COLOR_SUP, "width": 2})
+
+            elif kind == "fixed":
+                fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
+                              fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
+
+            fig.add_annotation(x=xp, y=-0.55, text=f"N{i}", showarrow=False, font={"size": 9, "color": COLOR_SUP})
 
     # Tải trọng
     x_acc = 0.0
