@@ -576,17 +576,13 @@ def render_continuous_beam() -> None:
                 st.plotly_chart(base_figure("Bending Moment Diagram", total_L_plot, "M (kNm)"), use_container_width=True)
         with d:
             if result_cb:
-                # 1. Gọi hàm dựng khung dầm nền nguyên bản (Đảm bảo SẠCH LỰC ngoại lực)
+                # 1. Khởi dựng phôi nền sạch từ hàm bổ trợ (Đồng bộ dải hiển thị cố định)
                 fig_el = _cb_draw_base_beam_and_supports(total_L_plot, span_lengths, support_kinds)
+                fig_el.update_layout(title={"text": "<b>Elastic Curve</b>"})
 
-                # 2. Cập nhật lại tiêu đề đồ thị võng
-                fig_el.update_layout(
-                    title={"text": "<b>Elastic Curve</b>", "x": 0.5, "font": {"size": 14}}
-                )
-
-                # 3. Tính toán và vẽ đường cong võng (Thu tỉ lệ hiển thị xuống 0.6 để không lấn sân gối đỡ)
+                # 2. Vẽ đường cong võng (khống chế biên độ trực quan tối đa là 0.65 để thoáng đồ thị)
                 mw = float(np.max(np.abs(result_cb.deflection))) + 1e-30
-                y_vis = -result_cb.deflection * (0.6 / mw)
+                y_vis = -result_cb.deflection * (0.65 / mw)
 
                 fig_el.add_trace(go.Scatter(
                     x=result_cb.x_global, y=y_vis, mode="lines",
@@ -595,40 +591,50 @@ def render_continuous_beam() -> None:
                     customdata=result_cb.deflection
                 ))
 
-                # 4. ÉP TRỤC Y CÙNG TỶ LỆ TUYỆT ĐỐI VỚI LOAD DIAGRAM
+                # 3. Đồng bộ trục Y khớp hoàn toàn với biểu đồ Load Diagram
                 fig_el.update_yaxes(
-                    range=[-1.6, 1.2],
+                    range=[-1.5, 1.2],
                     fixedrange=True,
                     showticklabels=True,
                     title="Deflection (visual)"
                 )
                 st.plotly_chart(fig_el, use_container_width=True)
             else:
-                fig_empty = base_figure("Elastic Curve", total_L_plot, "Deflection")
-                fig_empty.update_yaxes(range=[-1.6, 1.2], fixedrange=True)
+                fig_empty = go.Figure()
+                fig_empty.update_layout(height=315, title="<b>Elastic Curve</b>", xaxis=dict(range=[0, total_L_plot]))
+                fig_empty.update_yaxes(range=[-1.5, 1.2], fixedrange=True)
                 st.plotly_chart(fig_empty, use_container_width=True)
     with right:
         report_panel(result_cb.report if result_cb else None, "Thuyết Minh — Dầm Liên Tục", "cont_beam")
 
 
 def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.Figure:
-    """Hàm bổ trợ chuyên biệt: Chỉ vẽ trục dầm và các gối đỡ, nới rộng khung để không bao giờ mất chân"""
-    fig = base_figure("Dầm liên tục", total_L)
+    """Hàm dựng khung dầm và gối đỡ nền đồng bộ tỷ lệ hiển thị, không bị cắt chân sàn"""
+    fig = go.Figure()
 
-    # Ép khoảng trống lề dưới rộng rãi để chứa nhãn và chân sàn
+    # 1. Cấu hình Layout mở rộng lề dưới thoải mái, đồng bộ chiều cao hiển thị
     fig.update_layout(
+        title=dict(x=0.5, xanchor="center", font=dict(size=14, color="#333333")),
+        height=315,
         margin=dict(l=55, r=20, t=60, b=75),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        xaxis=dict(title="x (m)", range=[0, total_L], showgrid=True, linecolor="gray",
+                   gridcolor="rgba(128,128,128,0.15)"),
     )
 
-    # KHÓA CHỨNG TỶ LỆ TRỤC Y: Đảm bảo đồng bộ dải hiển thị trên mọi biểu đồ
+    # GỠ BỎ KHÓA TỶ LỆ CỨNG (scaleanchor): Ép cứng dải hiển thị cố định tuyệt đối cho cả 2 biểu đồ
     fig.update_yaxes(
-        range=[-1.6, 1.2],
-        fixedrange=True,  # Chặn Plotly tự ý co giãn làm méo/mất chân gối
+        range=[-1.5, 1.2],
+        fixedrange=True,
+        showgrid=False,
+        linecolor="gray",
         showticklabels=False,
         title=""
     )
 
-    # Vẽ thanh dầm chính màu xám
+    # 2. Vẽ trục dầm màu xám chính
     fig.add_trace(
         go.Scatter(x=[0, total_L], y=[0, 0], mode="lines", line={"color": COLOR_BEAM, "width": 8}, hoverinfo="skip"))
 
@@ -636,10 +642,11 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
     x_acc = 0.0
     for i, Ls in enumerate(span_lengths):
         mid = x_acc + Ls / 2
-        fig.add_annotation(x=mid, y=0.15, text=f"L{i + 1}={Ls:.1f}m", showarrow=False, font={"size": 10})
+        fig.add_annotation(x=mid, y=0.2, text=f"L{i + 1}={Ls:.1f}m", showarrow=False,
+                           font={"size": 10, "color": "#555"})
         x_acc += Ls
 
-    # Vẽ hệ thống gối đỡ
+    # 3. Vẽ hệ thống gối đỡ
     node_xs = [0.0] + list(np.cumsum(span_lengths))
     for i, kind in enumerate(support_kinds):
         xp = node_xs[i]
@@ -650,18 +657,17 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
                 fillcolor=COLOR_SUP, hoverinfo="skip"
             ))
         elif kind == "roller":
+            # Gối di động tối giản: Dùng marker pixel cố định không đổi hình dáng
             y_top = -0.08
             y_bot = -0.36
             y_floor = -0.44
             fig.add_trace(go.Scatter(
                 x=[xp], y=[y_top], mode="markers",
-                marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
-                hoverinfo="skip"
+                marker=dict(symbol="circle", size=7, color=COLOR_SUP), hoverinfo="skip"
             ))
             fig.add_trace(go.Scatter(
                 x=[xp], y=[y_bot], mode="markers",
-                marker=dict(symbol="circle", size=7, color=COLOR_SUP, line=dict(width=1, color=COLOR_SUP)),
-                hoverinfo="skip"
+                marker=dict(symbol="circle", size=7, color=COLOR_SUP), hoverinfo="skip"
             ))
             fig.add_trace(go.Scatter(
                 x=[xp, xp], y=[y_top, y_bot], mode="lines",
@@ -675,8 +681,8 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
             fig.add_shape(type="rect", x0=xp - total_L / 80, x1=xp + total_L / 80, y0=-0.42, y1=0.42,
                           fillcolor=COLOR_SUP, line={"color": COLOR_SUP})
 
-        # Đặt nhãn tên nút nằm an toàn dưới sàn phẳng
-        fig.add_annotation(x=xp, y=-0.65, text=f"N{i}", showarrow=False, font={"size": 10, "color": COLOR_SUP})
+        # Đặt nhãn N0, N1, N2 nằm an toàn phía dưới chân gối
+        fig.add_annotation(x=xp, y=-0.68, text=f"N{i}", showarrow=False, font={"size": 10, "color": COLOR_SUP})
 
     return fig
 
