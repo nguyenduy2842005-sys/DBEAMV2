@@ -600,7 +600,8 @@ def render_continuous_beam() -> None:
     left, right = st.columns([1.7, 1], gap="large")
 
     with left:
-        fig_load = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds)
+        fig_load = _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds,span_pm,
+    )
         a, b = st.columns(2)
         with a: st.plotly_chart(fig_load, use_container_width=True)
         with b:
@@ -883,62 +884,190 @@ def _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds) -> go.
     return fig
 
 
-def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds) -> go.Figure:
-    total_L = sum(span_lengths)
-    # 1. Lấy khung dầm và gối đỡ nền sạch từ hàm bổ trợ độc lập
-    fig = _cb_draw_base_beam_and_supports(total_L, span_lengths, support_kinds)
-    fig.update_layout(title={"text": "<b>Load Diagram — Dầm liên tục</b>", "x": 0.5})
+def _cb_load_diagram(span_lengths, span_EIs, span_pl, span_udl, support_kinds, span_pm=None) -> go.Figure:
 
-    # --- CHỈ VẼ TẢI TRỌNG TRÊN BIỂU ĐỒ NÀY ---
+    total_L = sum(span_lengths)
+
+    fig = _cb_draw_base_beam_and_supports(
+        total_L,
+        span_lengths,
+        support_kinds
+    )
+
+    fig.update_layout(
+        title={
+            "text": "<b>Load Diagram — Dầm liên tục</b>",
+            "x":0.5
+        }
+    )
+
     node_xs = [0.0] + list(np.cumsum(span_lengths))
 
-    # Duyệt qua từng nhịp để bóc tách các danh sách tải trọng con bên trong
+
+    # ===============================
+    # TẢI TRỌNG THEO TỪNG NHỊP
+    # ===============================
     for i in range(len(span_lengths)):
-        x_start = node_xs[i]  # Tọa độ gốc toàn cục của nhịp hiện tại
 
-        # 1. Vẽ tải trọng phân bố đều UDL cho nhịp hiện tại
+        x0_span = node_xs[i]
+
+
+        # -------------------------------
+        # UDL
+        # -------------------------------
         for q, x1_local, x2_local in span_udl[i]:
-            if abs(q) > 1e-5:
-                # Chuyển đổi tọa độ local của nhịp sang tọa độ global của toàn bộ dầm
-                x0_global = x_start + x1_local
-                x1_global = x_start + x2_local
 
-                sign = 1.0 if q > 0 else -1.0
-                y_val = sign * 0.45
+            if abs(q) < 1e-9:
+                continue
 
-                fig.add_trace(go.Scatter(
-                    x=[x0_global, x1_global, x1_global, x0_global, x0_global],
-                    y=[0, 0, y_val, y_val, 0],
-                    fill="toself", fillcolor="rgba(40,167,69,0.12)",
-                    line={"color": "#28a745", "width": 1},
-                    name=f"S{i} UDL", hovertemplate=f"UDL: {q:.2f} kN/m<extra></extra>"
-                ))
+            x1 = x0_span + x1_local
+            x2 = x0_span + x2_local
+
+
+            # q dương: hướng xuống vào dầm
+            # q âm: hướng lên vào dầm
+            if q > 0:
+                y_load = -0.45
+                arrow_start = -0.75
+                arrow_end = -0.05
+            else:
+                y_load = 0.45
+                arrow_start = 0.75
+                arrow_end = 0.05
+
+
+            # vùng tải
+            fig.add_trace(
+                go.Scatter(
+                    x=[x1,x2,x2,x1,x1],
+                    y=[0,0,y_load,y_load,0],
+                    fill="toself",
+                    mode="lines",
+                    line=dict(
+                        color="#28a745",
+                        width=1
+                    ),
+                    fillcolor="rgba(40,167,69,0.15)",
+                    hoverinfo="skip"
+                )
+            )
+
+
+            # mũi tên UDL
+            for xx in np.linspace(
+                x1,
+                x2,
+                max(3,int((x2-x1)/0.5))
+            ):
+
                 fig.add_annotation(
-                    x=(x0_global + x1_global) / 2, y=y_val + sign * 0.12,
-                    text=f"{q:.1f}kN/m", showarrow=False,
-                    font={"size": 10, "color": "#28a745"}
+                    x=xx,
+                    y=arrow_end,
+                    ax=xx,
+                    ay=arrow_start,
+                    xref="x",
+                    yref="y",
+                    axref="x",
+                    ayref="y",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=1.5,
+                    arrowcolor="#28a745"
                 )
 
-        # 2. Vẽ tải trọng tập trung Point Load cho nhịp hiện tại
-        for P, x_loc in span_pl[i]:
-            if abs(P) > 1e-5:
-                # Chuyển đổi tọa độ local sang global
-                xp_global = x_start + x_loc
 
-                sign = 1.0 if P > 0 else -1.0
-                y_arr_start = sign * 0.55
-                y_arr_end = sign * 0.05
+            fig.add_annotation(
+                x=(x1+x2)/2,
+                y=y_load*1.25,
+                text=f"{q:.1f} kN/m",
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color="#28a745"
+                )
+            )
+
+
+
+        # -------------------------------
+        # POINT LOAD
+        # -------------------------------
+        for P,x_local in span_pl[i]:
+
+            xp = x0_span + x_local
+
+
+            if P > 0:
+                ay = -0.75
+                y = -0.05
+            else:
+                ay = 0.75
+                y = 0.05
+
+
+            fig.add_annotation(
+                x=xp,
+                y=y,
+                ax=xp,
+                ay=ay,
+                showarrow=True,
+                arrowhead=3,
+                arrowwidth=2,
+                arrowcolor="#0b5fff"
+            )
+
+            fig.add_annotation(
+                x=xp,
+                y=ay,
+                text=f"{P:.1f} kN",
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color="#0b5fff"
+                )
+            )
+
+
+
+        # -------------------------------
+        # POINT MOMENT
+        # -------------------------------
+        if span_pm is not None:
+
+            for M,x_local in span_pm[i]:
+
+                xm = x0_span + x_local
+
+
+                # vòng cung moment
+                direction = 1 if M>0 else -1
+
 
                 fig.add_annotation(
-                    x=xp_global, y=y_arr_end, ax=xp_global, ay=y_arr_start,
-                    xref="x", yref="y", axref="x", ayref="y",
-                    showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#28a745"
+                    x=xm,
+                    y=0.35,
+                    text="↺" if direction>0 else "↻",
+                    showarrow=False,
+                    font=dict(
+                        size=24,
+                        color="#ff2b2b"
+                    )
                 )
+
+
                 fig.add_annotation(
-                    x=xp_global, y=y_arr_start + sign * 0.12,
-                    text=f"{P:.1f}kN", showarrow=False,
-                    font={"size": 10, "color": "#28a745"}
+                    x=xm,
+                    y=0.65,
+                    text=f"{M:.1f} kNm",
+                    showarrow=False,
+                    font=dict(
+                        size=10,
+                        color="#ff2b2b"
+                    )
                 )
+
+
     return fig
 # ══════════════════════════════════════════════════════
 #  ── TAB 3: PLANE FRAME ──────────────────────────────
